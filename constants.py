@@ -122,6 +122,7 @@ ICONS = {
     "prev": "\u25C0",
     "next": "\u25B6",
     "close": "\u2715",
+    "chart": "\u2581",
     "check": "\u2714",
     "warning": "\u26A0",
     "info": "\u2139",

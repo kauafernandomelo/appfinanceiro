@@ -87,7 +87,7 @@ class DashboardView(BaseView):
 
         ctk.CTkButton(
             header, text="Hoje",
-            height=38, corner_radius=8, padx=16,
+            height=38, corner_radius=8,
             font=ctk.CTkFont(size=FONT_SMALL, weight="bold"),
             fg_color="transparent",
             border_width=1,
@@ -95,7 +95,7 @@ class DashboardView(BaseView):
             hover_color=self.colors.get("primary_muted", "#3d3580"),
             text_color=self.colors.get("primary", "#6c5ce7"),
             command=self._voltar_hoje,
-        ).pack(side="left", padx=(SPACING_MD, 0))
+        ).pack(side="left", padx=(SPACING_MD, 0), ipadx=16)
 
         self._atualizar_label_mes()
 
