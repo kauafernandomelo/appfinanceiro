@@ -1,7 +1,6 @@
 import sqlite3
-from pathlib import Path
 from contextlib import contextmanager
-
+from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "financeiro.db"
 
@@ -50,7 +49,7 @@ def init_db() -> None:
                 valor REAL NOT NULL,
                 data TEXT NOT NULL,
                 categoria_id INTEGER,
-                FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+                FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS despesas (
@@ -59,7 +58,7 @@ def init_db() -> None:
                 valor REAL NOT NULL,
                 data TEXT NOT NULL,
                 categoria_id INTEGER,
-                FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+                FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS investimentos (
@@ -79,7 +78,7 @@ def init_db() -> None:
                 limite REAL NOT NULL,
                 mes TEXT NOT NULL,
                 UNIQUE(categoria_id, mes),
-                FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+                FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS metas (
@@ -98,7 +97,7 @@ def init_db() -> None:
                 categoria_id INTEGER,
                 dia_mes INTEGER NOT NULL,
                 ativo INTEGER DEFAULT 1,
-                FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+                FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
             );
         """)
 

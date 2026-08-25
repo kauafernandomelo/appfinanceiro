@@ -1,15 +1,18 @@
 import customtkinter as ctk
+
+from components.base_view import BaseView
+from components.toast import mostrar_toast
+from components.tooltip import Tooltip
 from database import get_connection
 from utils import formatar_moeda, obter_mes_atual
-from components.toast import mostrar_toast
-from components.base_view import BaseView
 
 
 class OrcamentoView(BaseView):
     def __init__(self, master, colors=None):
         super().__init__(master, colors)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=1)
         self._criar_header()
+        self._criar_resumo()
         self._criar_formulario()
         self._criar_lista()
 
@@ -20,9 +23,26 @@ class OrcamentoView(BaseView):
         ctk.CTkLabel(header, text=obter_mes_atual(), font=ctk.CTkFont(size=14),
                       text_color=self.colors.get("text_dim", "#a0a0a0")).pack(side="right")
 
+    def _criar_resumo(self):
+        self.resumo_frame = self._criar_card_frame(self)
+        self.resumo_frame.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        r = ctk.CTkFrame(self.resumo_frame, fg_color="transparent")
+        r.pack(fill="x", padx=16, pady=12)
+        r.grid_columnconfigure((0, 1), weight=1)
+
+        self.lbl_total_limite = self._criar_label(r, "Limite Total: R$ 0,00",
+                                                   font=ctk.CTkFont(size=13, weight="bold"),
+                                                   text_color=self.colors.get("text", "#fff"))
+        self.lbl_total_limite.grid(row=0, column=0, sticky="w")
+
+        self.lbl_total_gasto = self._criar_label(r, "Total Gasto: R$ 0,00",
+                                                  font=ctk.CTkFont(size=13, weight="bold"),
+                                                  text_color=self.colors.get("text", "#fff"))
+        self.lbl_total_gasto.grid(row=0, column=1, sticky="e")
+
     def _criar_formulario(self):
         form = self._criar_card_frame(self)
-        form.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        form.grid(row=2, column=0, sticky="ew", pady=(0, 12))
         g = ctk.CTkFrame(form, fg_color="transparent")
         g.pack(fill="x", padx=16, pady=14)
         g.grid_columnconfigure((0, 1, 2), weight=1)
@@ -42,13 +62,17 @@ class OrcamentoView(BaseView):
 
     def _criar_lista(self):
         self.container, self.lista = self._criar_lista_frame(self)
-        self.container.grid(row=2, column=0, sticky="nsew")
+        self.container.grid(row=3, column=0, sticky="nsew")
         self._atualizar()
 
     def _cats(self):
-        with get_connection() as conn:
-            cats = conn.execute("SELECT nome FROM categorias WHERE tipo='despesa' ORDER BY nome").fetchall()
-        return [c["nome"] for c in cats] if cats else ["Sem categoria"]
+        try:
+            with get_connection() as conn:
+                cats = conn.execute("SELECT nome FROM categorias WHERE tipo='despesa' ORDER BY nome").fetchall()
+            return [c["nome"] for c in cats] if cats else ["Sem categoria"]
+        except Exception:
+            mostrar_toast(self, "Erro ao carregar categorias", "erro")
+            return ["Sem categoria"]
 
     def _salvar(self):
         cat = self.combo_cat.get()
@@ -59,33 +83,84 @@ class OrcamentoView(BaseView):
         if lim is None:
             return
 
-        with get_connection() as conn:
-            c = conn.execute("SELECT id FROM categorias WHERE nome=?", (cat,)).fetchone()
-            if not c:
-                return
-            mes = obter_mes_atual()
-            ex = conn.execute("SELECT id FROM orcamento WHERE categoria_id=? AND mes=?", (c["id"], mes)).fetchone()
-            if ex:
-                conn.execute("UPDATE orcamento SET limite=? WHERE id=?", (lim, ex["id"]))
-            else:
-                conn.execute("INSERT INTO orcamento (categoria_id,limite,mes) VALUES (?,?,?)", (c["id"], lim, mes))
-            conn.commit()
+        try:
+            with get_connection() as conn:
+                c = conn.execute("SELECT id FROM categorias WHERE nome=?", (cat,)).fetchone()
+                if not c:
+                    mostrar_toast(self, "Categoria nao encontrada", "erro")
+                    return
+                mes = obter_mes_atual()
+                ex = conn.execute("SELECT id FROM orcamento WHERE categoria_id=? AND mes=?", (c["id"], mes)).fetchone()
+                if ex:
+                    conn.execute("UPDATE orcamento SET limite=? WHERE id=?", (lim, ex["id"]))
+                else:
+                    conn.execute("INSERT INTO orcamento (categoria_id,limite,mes) VALUES (?,?,?)", (c["id"], lim, mes))
+                conn.commit()
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao salvar orcamento: {e}", "erro")
+            return
+
         self.entry_limite.delete(0, "end")
         mostrar_toast(self, "Orcamento atualizado!")
         self._atualizar()
+        self._verificar_alertas()
+
+    def _verificar_alertas(self):
+        mes = obter_mes_atual()
+        try:
+            with get_connection() as conn:
+                rows = conn.execute(
+                    """SELECT COALESCE(c.nome,'?') as cat, o.limite,
+                              COALESCE(SUM(d.valor),0) as gasto
+                       FROM orcamento o
+                       LEFT JOIN categorias c ON o.categoria_id=c.id
+                       LEFT JOIN despesas d ON d.categoria_id=c.id AND strftime('%Y-%m',d.data)=o.mes
+                       WHERE o.mes=? GROUP BY o.id""", (mes,)).fetchall()
+        except Exception:
+            return
+
+        for o in rows:
+            pct = (o["gasto"] / o["limite"] * 100) if o["limite"] > 0 else 0
+            if pct > 100:
+                mostrar_toast(self, f"Limite excedido em {o['cat']}! ({pct:.0f}%)", "erro")
+            elif pct >= 80:
+                mostrar_toast(self, f"{o['cat']} proximo do limite! ({pct:.0f}%)", "aviso")
 
     def _atualizar(self):
         for w in self.lista.winfo_children():
             w.destroy()
         mes = obter_mes_atual()
-        with get_connection() as conn:
-            rows = conn.execute(
-                """SELECT o.id, COALESCE(c.nome,'?') as cat, o.limite,
-                          COALESCE(SUM(d.valor),0) as gasto
-                   FROM orcamento o
-                   LEFT JOIN categorias c ON o.categoria_id=c.id
-                   LEFT JOIN despesas d ON d.categoria_id=c.id AND strftime('%Y-%m',d.data)=o.mes
-                   WHERE o.mes=? GROUP BY o.id""", (mes,)).fetchall()
+
+        total_limite = 0
+        total_gasto = 0
+
+        try:
+            with get_connection() as conn:
+                rows = conn.execute(
+                    """SELECT o.id, COALESCE(c.nome,'?') as cat, o.limite,
+                              COALESCE(SUM(d.valor),0) as gasto
+                       FROM orcamento o
+                       LEFT JOIN categorias c ON o.categoria_id=c.id
+                       LEFT JOIN despesas d ON d.categoria_id=c.id AND strftime('%Y-%m',d.data)=o.mes
+                       WHERE o.mes=? GROUP BY o.id""", (mes,)).fetchall()
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao carregar orcamentos: {e}", "erro")
+            return
+
+        for o in rows:
+            total_limite += o["limite"]
+            total_gasto += o["gasto"]
+
+        if total_limite > 0:
+            pct_total = (total_gasto / total_limite * 100)
+            self.lbl_total_limite.configure(text=f"Limite Total: {formatar_moeda(total_limite)}")
+            cor_total = self.colors.get("green", "#00b894") if pct_total <= 80 else self.colors.get("yellow", "#fdcb6e") if pct_total <= 100 else self.colors.get("red", "#d63031")
+            self.lbl_total_gasto.configure(text=f"Total Gasto: {formatar_moeda(total_gasto)} ({pct_total:.0f}%)",
+                                           text_color=cor_total)
+        else:
+            self.lbl_total_limite.configure(text="Limite Total: R$ 0,00")
+            self.lbl_total_gasto.configure(text="Total Gasto: R$ 0,00",
+                                           text_color=self.colors.get("text", "#fff"))
 
         if not rows:
             ctk.CTkLabel(self.lista, text="Nenhum orcamento definido\n\nSelecione uma categoria e defina um limite",
@@ -116,14 +191,25 @@ class OrcamentoView(BaseView):
                           font=ctk.CTkFont(size=11),
                           text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
-            ctk.CTkButton(row, text="X", width=30, height=28, corner_radius=6,
-                           font=ctk.CTkFont(size=11, weight="bold"),
+            btn_frame = ctk.CTkFrame(row, fg_color="transparent")
+            btn_frame.grid(row=0, column=2, padx=12, pady=10)
+
+            btn_excluir = ctk.CTkButton(btn_frame, text="✕", width=30, height=28, corner_radius=6,
+                           font=ctk.CTkFont(size=12, weight="bold"),
                            fg_color=self.colors.get("red", "#d63031"), hover_color="#c0392b",
-                           command=lambda oid=o["id"]: self._excluir(oid)).grid(row=0, column=2, padx=12, pady=10)
+                           command=lambda oid=o["id"]: self._excluir(oid))
+            btn_excluir.pack(side="left", padx=2)
+            Tooltip(btn_excluir, "Excluir orcamento")
 
     def _excluir(self, oid):
-        with get_connection() as conn:
-            conn.execute("DELETE FROM orcamento WHERE id=?", (oid,))
-            conn.commit()
+        if not self._confirmar_exclusao("Excluir Orcamento", "Deseja excluir este orcamento?"):
+            return
+        try:
+            with get_connection() as conn:
+                conn.execute("DELETE FROM orcamento WHERE id=?", (oid,))
+                conn.commit()
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao excluir orcamento: {e}", "erro")
+            return
         mostrar_toast(self, "Orcamento removido!")
         self._atualizar()

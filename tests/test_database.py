@@ -1,11 +1,11 @@
 import os
 import sys
-import tempfile
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from database import init_db, get_connection, CATEGORIAS_PADRAO
+from database import CATEGORIAS_PADRAO, get_connection, init_db
 
 
 @pytest.fixture

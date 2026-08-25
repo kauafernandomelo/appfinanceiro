@@ -2,17 +2,20 @@ import customtkinter as ctk
 
 
 class Tooltip(ctk.CTkToplevel):
-    def __init__(self, widget, text, **kwargs):
+    """Tooltip flutuante que aparece ao passar o mouse sobre um widget."""
+
+    def __init__(self, widget, text, colors=None, **kwargs):
         super().__init__(widget, **kwargs)
         self.widget = widget
         self.text = text
+        self.colors = colors or {}
 
         self.overrideredirect(True)
-        self.configure(fg_color="#2d2d44")
+        self.configure(fg_color=self.colors.get("border", "#2d2d44"))
 
         label = ctk.CTkLabel(
             self, text=text, font=ctk.CTkFont(size=11),
-            text_color="#ffffff", padx=8, pady=4,
+            text_color=self.colors.get("text", "#ffffff"), padx=8, pady=4,
         )
         label.pack()
 

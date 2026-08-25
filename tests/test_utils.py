@@ -1,7 +1,13 @@
 from utils import (
-    formatar_moeda, formatar_data, obter_mes_atual,
-    obter_data_atual, parse_data_br, validar_data,
-    validar_valor, parse_valor,
+    formatar_data,
+    formatar_moeda,
+    formatar_percentual,
+    obter_data_atual,
+    obter_mes_atual,
+    parse_data_br,
+    parse_valor,
+    validar_data,
+    validar_valor,
 )
 
 
@@ -73,3 +79,10 @@ def test_parse_valor():
     assert parse_valor("100,50") == 100.5
     assert parse_valor("100.50") == 100.5
     assert parse_valor("0") == 0.0
+
+
+def test_formatar_percentual():
+    assert formatar_percentual(85.5) == "85,5%"
+    assert formatar_percentual(0) == "0,0%"
+    assert formatar_percentual(100) == "100,0%"
+    assert formatar_percentual(33.333) == "33,3%"

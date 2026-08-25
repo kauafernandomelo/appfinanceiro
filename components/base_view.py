@@ -1,6 +1,7 @@
 import customtkinter as ctk
-from components.toast import mostrar_toast
+
 from components.modals import ConfirmarExclusaoModal
+from components.toast import mostrar_toast
 
 
 class BaseView(ctk.CTkFrame):

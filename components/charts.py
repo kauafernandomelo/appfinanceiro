@@ -60,7 +60,7 @@ class ChartWidget(ctk.CTkFrame):
         ax.set_facecolor("#1a1a2e")
 
         cores = ["#00b894" if v >= 0 else "#d63031" for v in valores]
-        bars = ax.bar(labels, valores, color=cores, edgecolor="#2d2d44", width=0.6)
+        ax.bar(labels, valores, color=cores, edgecolor="#2d2d44", width=0.6)
 
         ax.set_title(titulo, color="white", fontsize=11)
         ax.tick_params(colors="white", labelsize=8)
@@ -69,8 +69,7 @@ class ChartWidget(ctk.CTkFrame):
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-        plt = fig
-        plt.tight_layout()
+        fig.tight_layout()
 
         self.canvas = FigureCanvasTkAgg(fig, master=self)
         self.canvas.draw()

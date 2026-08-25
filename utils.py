@@ -43,5 +43,11 @@ def validar_valor(valor: str) -> bool:
         return False
 
 
+def formatar_percentual(valor: float) -> str:
+    """Formata um valor como percentual: 85.5 -> '85,5%'"""
+    return f"{valor:.1f}%".replace(".", ",")
+
+
 def parse_valor(valor: str) -> float:
+    """Converte string de valor para float."""
     return float(valor.replace(",", "."))

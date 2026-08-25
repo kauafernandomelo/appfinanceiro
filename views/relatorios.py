@@ -1,18 +1,33 @@
+import csv
+import os
+
 import customtkinter as ctk
-from database import get_connection
-from utils import formatar_moeda, obter_mes_atual, obter_data_atual
+import matplotlib
+
+matplotlib.use("Agg")
+from datetime import datetime
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+
+from components.base_view import BaseView
 from components.charts import ChartWidget
 from components.toast import mostrar_toast
-from components.base_view import BaseView
+from database import get_connection
+from utils import formatar_moeda, obter_data_atual, obter_mes_atual
+
+MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+               "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 
 
 class RelatoriosView(BaseView):
     def __init__(self, master, colors=None):
         super().__init__(master, colors)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=1)
         self._criar_header()
         self._criar_filtros()
         self._criar_conteudo()
+        self._criar_evolucao_temporal()
 
     def _criar_header(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
@@ -41,7 +56,12 @@ class RelatoriosView(BaseView):
         ctk.CTkButton(inner, text="Exportar PDF", height=36, corner_radius=8,
                        font=ctk.CTkFont(size=13, weight="bold"),
                        fg_color=self.colors.get("accent", "#00cec9"), hover_color="#00a3a3",
-                       command=self._exportar_pdf).pack(side="left")
+                       command=self._exportar_pdf).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(inner, text="Exportar CSV", height=36, corner_radius=8,
+                       font=ctk.CTkFont(size=13, weight="bold"),
+                       fg_color="#00b894", hover_color="#009e7a",
+                       command=self._exportar_csv).pack(side="left")
 
         self.label_saldo = ctk.CTkLabel(inner, text="", font=ctk.CTkFont(size=14, weight="bold"))
         self.label_saldo.pack(side="right")
@@ -63,23 +83,116 @@ class RelatoriosView(BaseView):
         container, self.lista_frame = self._criar_lista_frame(self.conteudo)
         container.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(12, 0))
 
+    def _criar_evolucao_temporal(self):
+        self.evolucao_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.evolucao_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        self.evolucao_frame.grid_columnconfigure(0, weight=1)
+        self.evolucao_frame.grid_rowconfigure(0, weight=1)
+        self._atualizar_evolucao_temporal()
+
+    def _atualizar_evolucao_temporal(self):
+        for w in self.evolucao_frame.winfo_children():
+            w.destroy()
+
+        card = self._criar_card_frame(self.evolucao_frame)
+        card.grid(row=0, column=0, sticky="nsew")
+        ctk.CTkLabel(card, text="  Evolucao Temporal - Receitas vs Despesas",
+                      font=ctk.CTkFont(size=13, weight="bold"),
+                      text_color=self.colors.get("text", "#fff"), anchor="w").pack(fill="x", padx=16, pady=(12, 0))
+
+        try:
+            meses_labels, receitas_valores, despesas_valores = self._dados_evolucao_temporal()
+        except Exception:
+            meses_labels = MESES_ABREV[-6:]
+            receitas_valores = [0] * 6
+            despesas_valores = [0] * 6
+
+        fig = Figure(figsize=(10, 3.5), dpi=100, facecolor="#1a1a2e")
+        ax = fig.add_subplot(111)
+        ax.set_facecolor("#1a1a2e")
+
+        ax.plot(meses_labels, receitas_valores, color="#00b894", linewidth=2.5, marker="o",
+                markersize=6, label="Receitas", zorder=5)
+        ax.fill_between(range(len(meses_labels)), receitas_valores, alpha=0.1, color="#00b894")
+
+        ax.plot(meses_labels, despesas_valores, color="#d63031", linewidth=2.5, marker="o",
+                markersize=6, label="Despesas", zorder=5)
+        ax.fill_between(range(len(meses_labels)), despesas_valores, alpha=0.1, color="#d63031")
+
+        ax.set_title("Receitas vs Despesas - Ultimos 6 Meses", color="white", fontsize=11, pad=10)
+        ax.tick_params(colors="white", labelsize=9)
+        ax.spines["bottom"].set_color("#2d2d44")
+        ax.spines["left"].set_color("#2d2d44")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.legend(loc="upper left", fontsize=9, facecolor="#1a1a2e", edgecolor="#2d2d44",
+                  labelcolor="white")
+        ax.set_xlim(-0.5, len(meses_labels) - 0.5)
+        ax.grid(axis="y", color="#2d2d44", linestyle="--", alpha=0.5)
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=card)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=8, pady=(4, 12))
+
+    def _dados_evolucao_temporal(self):
+        import datetime as dt
+        now = dt.datetime.now()
+        meses_labels = []
+        receitas_valores = []
+        despesas_valores = []
+
+        for i in range(5, -1, -1):
+            mes = now.month - i
+            ano = now.year
+            while mes <= 0:
+                mes += 12
+                ano -= 1
+
+            meses_labels.append(MESES_ABREV[mes - 1])
+            mes_str = f"{ano}-{mes:02d}"
+
+            try:
+                with get_connection() as conn:
+                    receita = conn.execute(
+                        "SELECT COALESCE(SUM(valor),0) FROM receitas WHERE strftime('%Y-%m',data)=?",
+                        (mes_str,)
+                    ).fetchone()[0]
+                    despesa = conn.execute(
+                        "SELECT COALESCE(SUM(valor),0) FROM despesas WHERE strftime('%Y-%m',data)=?",
+                        (mes_str,)
+                    ).fetchone()[0]
+            except Exception:
+                receita = 0
+                despesa = 0
+
+            receitas_valores.append(float(receita))
+            despesas_valores.append(float(despesa))
+
+        return meses_labels, receitas_valores, despesas_valores
+
     def _gerar(self):
         mes = self.entry_mes.get().strip()
         if not mes:
             return
 
-        with get_connection() as conn:
-            receitas = conn.execute(
-                """SELECT COALESCE(c.nome,'Sem categoria') as nome, SUM(r.valor) as total
-                   FROM receitas r LEFT JOIN categorias c ON r.categoria_id=c.id
-                   WHERE strftime('%Y-%m',r.data)=? GROUP BY c.nome""", (mes,)).fetchall()
+        try:
+            with get_connection() as conn:
+                receitas = conn.execute(
+                    """SELECT COALESCE(c.nome,'Sem categoria') as nome, SUM(r.valor) as total
+                       FROM receitas r LEFT JOIN categorias c ON r.categoria_id=c.id
+                       WHERE strftime('%Y-%m',r.data)=? GROUP BY c.nome""", (mes,)).fetchall()
 
-            despesas = conn.execute(
-                """SELECT COALESCE(c.nome,'Sem categoria') as nome, SUM(d.valor) as total
-                   FROM despesas d LEFT JOIN categorias c ON d.categoria_id=c.id
-                   WHERE strftime('%Y-%m',d.data)=? GROUP BY c.nome""", (mes,)).fetchall()
+                despesas = conn.execute(
+                    """SELECT COALESCE(c.nome,'Sem categoria') as nome, SUM(d.valor) as total
+                       FROM despesas d LEFT JOIN categorias c ON d.categoria_id=c.id
+                       WHERE strftime('%Y-%m',d.data)=? GROUP BY c.nome""", (mes,)).fetchall()
 
-            inv = conn.execute("SELECT SUM(valor_investido) as ti, SUM(valor_atual) as ta FROM investimentos").fetchone()
+                inv = conn.execute("SELECT SUM(valor_investido) as ti, SUM(valor_atual) as ta FROM investimentos").fetchone()
+        except Exception:
+            mostrar_toast(self, "Erro ao acessar banco de dados!", "erro")
+            return
 
         total_r = sum(r["total"] for r in receitas)
         total_d = sum(d["total"] for d in despesas)
@@ -170,17 +283,53 @@ class RelatoriosView(BaseView):
                       font=ctk.CTkFont(size=13, weight="bold"), text_color=saldo_cor).grid(
             row=row, column=0, sticky="w", padx=16, pady=(12, 8))
 
+    def _exportar_csv(self):
+        if not self._dados_cache:
+            mostrar_toast(self, "Gere um relatorio primeiro!", "erro")
+            return
+
+        try:
+            mes = self._dados_cache["mes"]
+            filename = f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            downloads_dir = os.path.expanduser("~/Downloads")
+            filepath = os.path.join(downloads_dir, filename)
+
+            try:
+                with get_connection() as conn:
+                    receitas_linhas = conn.execute(
+                        """SELECT data, descricao, valor FROM receitas
+                           WHERE strftime('%Y-%m',data)=? ORDER BY data""", (mes,)).fetchall()
+                    despesas_linhas = conn.execute(
+                        """SELECT data, descricao, valor FROM despesas
+                           WHERE strftime('%Y-%m',data)=? ORDER BY data""", (mes,)).fetchall()
+            except Exception:
+                mostrar_toast(self, "Erro ao acessar banco de dados!", "erro")
+                return
+
+            with open(filepath, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Data", "Descricao", "Tipo", "Valor", "Categoria"])
+
+                for r in receitas_linhas:
+                    writer.writerow([r["data"], r["descricao"], "Receita", f"{r['valor']:.2f}", ""])
+
+                for d in despesas_linhas:
+                    writer.writerow([d["data"], d["descricao"], "Despesa", f"{d['valor']:.2f}", ""])
+
+            mostrar_toast(self, f"CSV exportado: {filename}!")
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao exportar CSV: {str(e)[:50]}", "erro")
+
     def _exportar_pdf(self):
         if not self._dados_cache:
             mostrar_toast(self, "Gere um relatorio primeiro!", "erro")
             return
 
         try:
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.units import cm
             from reportlab.lib.colors import HexColor
-            import os
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.units import cm
+            from reportlab.pdfgen import canvas
 
             d = self._dados_cache
             filename = f"relatorio_{d['mes']}.pdf"
@@ -245,4 +394,4 @@ class RelatoriosView(BaseView):
         except ImportError:
             mostrar_toast(self, "Instale reportlab: pip install reportlab", "erro")
         except Exception as e:
-            mostrar_toast(self, f"Erro ao exportar: {str(e)[:50]}", "erro")
+            mostrar_toast(self, f"Erro ao exportar PDF: {str(e)[:50]}", "erro")

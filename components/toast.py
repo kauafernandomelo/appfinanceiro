@@ -1,6 +1,5 @@
 import customtkinter as ctk
 
-
 toasts_ativos = []
 
 
@@ -32,7 +31,6 @@ class Toast(ctk.CTkFrame):
 
     def _reposition_all(self):
         try:
-            parent = self.master
             for i, t in enumerate(toasts_ativos):
                 if t.winfo_exists():
                     t.place(relx=0.5, rely=0.02 + i * 0.04, anchor="n")

@@ -1,16 +1,20 @@
+import calendar
+from datetime import datetime
+
 import customtkinter as ctk
-from database import init_db
+
 from components.sidebar import Sidebar
+from database import get_connection, init_db
+from views.categorias import CategoriasView
+from views.configuracoes import ConfiguracoesView
 from views.dashboard import DashboardView
-from views.receitas import ReceitasView
 from views.despesas import DespesasView
 from views.investimentos import InvestimentosView
-from views.categorias import CategoriasView
-from views.orcamento import OrcamentoView
 from views.metas import MetasView
+from views.orcamento import OrcamentoView
+from views.receitas import ReceitasView
 from views.recorrentes import RecorrentesView
 from views.relatorios import RelatoriosView
-
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -30,6 +34,21 @@ COLORS = {
     "border": "#2d2d44",
 }
 
+LIGHT_COLORS = {
+    "bg_dark": "#f0f0f5",
+    "bg_card": "#ffffff",
+    "bg_hover": "#e8e8f0",
+    "primary": "#6c5ce7",
+    "primary_hover": "#5a4bd1",
+    "accent": "#00b2b0",
+    "green": "#009874",
+    "red": "#c0392b",
+    "yellow": "#d4a017",
+    "text": "#1a1a2e",
+    "text_dim": "#555566",
+    "border": "#ccccdd",
+}
+
 
 class App(ctk.CTk):
     def __init__(self):
@@ -37,7 +56,12 @@ class App(ctk.CTk):
         self.title("FinancePro - Controle Financeiro")
         self.geometry("1320x760")
         self.minsize(1050, 620)
-        self.configure(fg_color=COLORS["bg_dark"])
+
+        self.theme = "dark"
+        self.current_colors = dict(COLORS)
+        self.sidebar_collapsed = False
+
+        self.configure(fg_color=self.current_colors["bg_dark"])
 
         init_db()
         self._verificar_recorrentes()
@@ -45,10 +69,19 @@ class App(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        self.sidebar = Sidebar(self, on_navigate=self.navegar, colors=COLORS)
+        self.sidebar = Sidebar(
+            self,
+            on_navigate=self.navegar,
+            colors=self.current_colors,
+            on_toggle_collapse=self._toggle_sidebar_collapse,
+            on_toggle_theme=self.toggle_theme,
+            collapsed=self.sidebar_collapsed,
+        )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
 
-        self.content_frame = ctk.CTkFrame(self, fg_color=COLORS["bg_dark"], corner_radius=0)
+        self.content_frame = ctk.CTkFrame(
+            self, fg_color=self.current_colors["bg_dark"], corner_radius=0
+        )
         self.content_frame.grid(row=0, column=1, sticky="nsew")
         self.content_frame.grid_columnconfigure(0, weight=1)
         self.content_frame.grid_rowconfigure(0, weight=1)
@@ -61,97 +94,158 @@ class App(ctk.CTk):
         self.bind("<Control-d>", lambda e: self.navegar("despesas"))
         self.bind("<Control-i>", lambda e: self.navegar("investimentos"))
         self.bind("<Control-l>", lambda e: self.navegar("relatorios"))
+        self.bind("<Control-b>", lambda e: self.navegar("categorias"))
+        self.bind("<Control-o>", lambda e: self.navegar("orcamento"))
+        self.bind("<Control-m>", lambda e: self.navegar("metas"))
+        self.bind("<Control-c>", lambda e: self.navegar("recorrentes"))
+        self.bind("<Control-t>", lambda e: self.navegar("configuracoes"))
         self.bind("<Escape>", lambda e: self.navegar("dashboard"))
 
     def _verificar_recorrentes(self):
-        from datetime import datetime
-        from utils import obter_mes_atual
-        from database import get_connection
-
+        """Verifica se existem lancamentos recorrentes para o mes atual que ainda nao foram gerados."""
         hoje = datetime.now()
-        mes = obter_mes_atual()
+        mes = hoje.strftime("%Y-%m")
 
         with get_connection() as conn:
             ativos = conn.execute(
-                "SELECT COUNT(*) FROM recorrentes WHERE ativo=1 AND dia_mes=?", (hoje.day,)
-            ).fetchone()[0]
+                "SELECT * FROM recorrentes WHERE ativo=1"
+            ).fetchall()
 
-            if ativos > 0:
-                ja_existe = conn.execute(
-                    """SELECT COUNT(*) FROM (
-                        SELECT id FROM despesas WHERE strftime('%Y-%m',data)=?
-                        UNION ALL
-                        SELECT id FROM receitas WHERE strftime('%Y-%m',data)=?
-                    )""", (mes, mes)
-                ).fetchone()[0]
+            if not ativos:
+                return
 
-                if ja_existe == 0:
-                    self.after(1000, lambda: self._popup_recorrentes(ativos))
+            ja_gerados = 0
+            for rec in ativos:
+                if rec["tipo"] == "receita":
+                    existe = conn.execute(
+                        "SELECT COUNT(*) FROM receitas WHERE descricao=? AND strftime('%Y-%m',data)=?",
+                        (rec["descricao"], mes),
+                    ).fetchone()[0]
+                else:
+                    existe = conn.execute(
+                        "SELECT COUNT(*) FROM despesas WHERE descricao=? AND strftime('%Y-%m',data)=?",
+                        (rec["descricao"], mes),
+                    ).fetchone()[0]
+                if existe > 0:
+                    ja_gerados += 1
+
+            pendentes = len(ativos) - ja_gerados
+            if pendentes > 0:
+                self.after(1000, lambda: self._popup_recorrentes(pendentes))
 
     def _popup_recorrentes(self, count):
+        """Exibe popup perguntando se o usuario deseja gerar lancamentos recorrentes do mes."""
         modal = ctk.CTkToplevel(self)
         modal.title("Lancamentos Recorrentes")
         modal.geometry("380x200")
-        modal.configure(fg_color=COLORS["bg_dark"])
+        modal.configure(fg_color=self.current_colors["bg_dark"])
         modal.grab_set()
 
         f = ctk.CTkFrame(modal, fg_color="transparent")
         f.pack(fill="both", expand=True, padx=24, pady=24)
 
-        ctk.CTkLabel(f, text="Lancamentos Recorrentes Detectados",
-                      font=ctk.CTkFont(size=16, weight="bold"),
-                      text_color=COLORS["text"]).pack(anchor="w")
+        ctk.CTkLabel(
+            f,
+            text="Lancamentos Recorrentes Detectados",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=self.current_colors["text"],
+        ).pack(anchor="w")
 
-        ctk.CTkLabel(f, text=f"Existem {count} contas recorrentes ativas.\nDeseja gerar os lancamentos do mes atual?",
-                      font=ctk.CTkFont(size=13),
-                      text_color=COLORS["text_dim"], wraplength=320).pack(anchor="w", pady=(12, 20))
+        ctk.CTkLabel(
+            f,
+            text=f"Existem {count} contas recorrentes pendentes.\nDeseja gerar os lancamentos do mes atual?",
+            font=ctk.CTkFont(size=13),
+            text_color=self.current_colors["text_dim"],
+            wraplength=320,
+        ).pack(anchor="w", pady=(12, 20))
 
         btns = ctk.CTkFrame(f, fg_color="transparent")
         btns.pack(fill="x")
 
         def gerar():
-            from utils import obter_mes_atual
-            from datetime import datetime
+            ano_num = datetime.now().year
+            mes_num = datetime.now().month
+            dias_no_mes = calendar.monthrange(ano_num, mes_num)[1]
+
             with get_connection() as conn:
-                ativos = conn.execute("SELECT * FROM recorrentes WHERE ativo=1").fetchall()
-                mes = obter_mes_atual()
-                ano, mes_num = mes.split("-")
-                dias = 31 if mes_num in ("01","03","05","07","08","10","12") else 30 if mes_num != "02" else 28
+                ativos = conn.execute(
+                    "SELECT * FROM recorrentes WHERE ativo=1"
+                ).fetchall()
                 gerados = 0
                 for r in ativos:
-                    dia = min(r["dia_mes"], dias)
-                    data = f"{ano}-{mes_num:02d}-{dia:02d}"
-                    cat = conn.execute("SELECT id FROM categorias WHERE id=?", (r["categoria_id"],)).fetchone()
+                    dia = min(r["dia_mes"], dias_no_mes)
+                    data = f"{ano_num}-{mes_num:02d}-{dia:02d}"
+                    cat = conn.execute(
+                        "SELECT id FROM categorias WHERE id=?", (r["categoria_id"],)
+                    ).fetchone()
                     cid = cat["id"] if cat else None
                     if r["tipo"] == "receita":
-                        conn.execute("INSERT INTO receitas (descricao,valor,data,categoria_id) VALUES (?,?,?,?)",
-                                     (r["descricao"], r["valor"], data, cid))
+                        conn.execute(
+                            "INSERT INTO receitas (descricao,valor,data,categoria_id) VALUES (?,?,?,?)",
+                            (r["descricao"], r["valor"], data, cid),
+                        )
                     else:
-                        conn.execute("INSERT INTO despesas (descricao,valor,data,categoria_id) VALUES (?,?,?,?)",
-                                     (r["descricao"], r["valor"], data, cid))
+                        conn.execute(
+                            "INSERT INTO despesas (descricao,valor,data,categoria_id) VALUES (?,?,?,?)",
+                            (r["descricao"], r["valor"], data, cid),
+                        )
                     gerados += 1
                 conn.commit()
             modal.destroy()
             self.navegar("dashboard")
 
-        ctk.CTkButton(btns, text="Gerar", height=36, corner_radius=8,
-                       font=ctk.CTkFont(size=13, weight="bold"),
-                       fg_color=COLORS["green"], hover_color="#00a884",
-                       command=gerar).pack(side="left", expand=True, fill="x", padx=(0, 6))
-        ctk.CTkButton(btns, text="Agora Nao", height=36, corner_radius=8,
-                       fg_color=COLORS["border"], hover_color="#3d3d54",
-                       command=modal.destroy).pack(side="right", expand=True, fill="x", padx=(6, 0))
+        ctk.CTkButton(
+            btns,
+            text="Gerar",
+            height=36,
+            corner_radius=8,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=self.current_colors["green"],
+            hover_color="#00a884",
+            command=gerar,
+        ).pack(side="left", expand=True, fill="x", padx=(0, 6))
+
+        ctk.CTkButton(
+            btns,
+            text="Agora Nao",
+            height=36,
+            corner_radius=8,
+            fg_color=self.current_colors["border"],
+            hover_color="#3d3d54",
+            command=modal.destroy,
+        ).pack(side="right", expand=True, fill="x", padx=(6, 0))
 
     def _atalho_novo(self):
-        nav_map = {
-            "receitas": "receitas",
-            "despesas": "despesas",
-            "investimentos": "investimentos",
-        }
-        if self.sidebar.active_view in nav_map:
-            pass
+        """Navega para a view atual e foca no campo de novo registro."""
+        view = self.sidebar.active_view
+        if view in ("receitas", "despesas", "investimentos"):
+            self.navegar(view)
+        else:
+            self.navegar("dashboard")
+
+    def toggle_theme(self):
+        """Alterna entre tema dark e light."""
+        if self.theme == "dark":
+            self.theme = "light"
+            self.current_colors = dict(LIGHT_COLORS)
+            ctk.set_appearance_mode("light")
+        else:
+            self.theme = "dark"
+            self.current_colors = dict(COLORS)
+            ctk.set_appearance_mode("dark")
+
+        self.configure(fg_color=self.current_colors["bg_dark"])
+        self.content_frame.configure(fg_color=self.current_colors["bg_dark"])
+        self.sidebar.update_colors(self.current_colors)
+        self.navegar(self.sidebar.active_view)
+
+    def _toggle_sidebar_collapse(self):
+        """Alterna entre sidebar colapsada (60px) e expandida (240px)."""
+        self.sidebar_collapsed = not self.sidebar_collapsed
+        self.sidebar.set_collapsed(self.sidebar_collapsed)
 
     def navegar(self, view_name):
+        """Navega para a view especificada, destruindo a view atual."""
         if self.current_view:
             self.current_view.destroy()
 
@@ -165,10 +259,11 @@ class App(ctk.CTk):
             "metas": MetasView,
             "recorrentes": RecorrentesView,
             "relatorios": RelatoriosView,
+            "configuracoes": ConfiguracoesView,
         }
 
         view_class = views_map.get(view_name, DashboardView)
-        self.current_view = view_class(self.content_frame, colors=COLORS)
+        self.current_view = view_class(self.content_frame, colors=self.current_colors)
         self.current_view.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
 
 

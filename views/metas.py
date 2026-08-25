@@ -1,9 +1,10 @@
 import customtkinter as ctk
+
+from components.base_view import BaseView
+from components.toast import mostrar_toast
+from components.tooltip import Tooltip
 from database import get_connection
 from utils import formatar_moeda
-from components.toast import mostrar_toast
-from components.base_view import BaseView
-from components.modals import ConfirmarExclusaoModal
 
 
 class MetasView(BaseView):
@@ -60,22 +61,57 @@ class MetasView(BaseView):
         if val is None:
             return
 
-        with get_connection() as conn:
-            conn.execute("INSERT INTO metas (nome,valor_alvo,valor_atual,prazo) VALUES (?, ?, 0, ?)",
-                         (nome, val, prazo))
-            conn.commit()
+        try:
+            with get_connection() as conn:
+                conn.execute("INSERT INTO metas (nome,valor_alvo,valor_atual,prazo) VALUES (?, ?, 0, ?)",
+                             (nome, val, prazo))
+                conn.commit()
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao criar meta: {e}", "erro")
+            return
+
         self.entry_nome.delete(0, "end")
         self.entry_valor.delete(0, "end")
         self.entry_prazo.delete(0, "end")
         mostrar_toast(self, f"Meta '{nome}' criada!")
         self._atualizar()
 
+    def _adicionar_valor_inline(self, mid, entry_widget):
+        val_str = entry_widget.get().replace(",", ".").strip()
+        if not val_str:
+            mostrar_toast(self, "Informe um valor", "erro")
+            return
+        val = self._validar_valor(val_str)
+        if val is None:
+            return
+
+        try:
+            with get_connection() as conn:
+                atual = conn.execute("SELECT valor_atual FROM metas WHERE id=?", (mid,)).fetchone()
+                if not atual:
+                    mostrar_toast(self, "Meta nao encontrada", "erro")
+                    return
+                novo_valor = atual["valor_atual"] + val
+                conn.execute("UPDATE metas SET valor_atual=? WHERE id=?", (novo_valor, mid))
+                conn.commit()
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao adicionar valor: {e}", "erro")
+            return
+
+        entry_widget.delete(0, "end")
+        mostrar_toast(self, f"R$ {val:,.2f} adicionado!".replace(",", "X").replace(".", ",").replace("X", "."))
+        self._atualizar()
+
     def _atualizar(self):
         for w in self.lista.winfo_children():
             w.destroy()
 
-        with get_connection() as conn:
-            rows = conn.execute("SELECT id,nome,valor_alvo,valor_atual,prazo FROM metas ORDER BY prazo").fetchall()
+        try:
+            with get_connection() as conn:
+                rows = conn.execute("SELECT id,nome,valor_alvo,valor_atual,prazo FROM metas ORDER BY prazo").fetchall()
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao carregar metas: {e}", "erro")
+            return
 
         if not rows:
             ctk.CTkLabel(self.lista, text="Nenhuma meta criada\n\nCrie uma meta para comecar a economizar!",
@@ -85,7 +121,7 @@ class MetasView(BaseView):
 
         for i, m in enumerate(rows):
             row = ctk.CTkFrame(self.lista, fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                corner_radius=8, height=70)
+                                corner_radius=8, height=90)
             row.grid(row=i, column=0, sticky="ew", pady=4)
             row.grid_columnconfigure(1, weight=1)
 
@@ -100,7 +136,12 @@ class MetasView(BaseView):
             bf.grid_columnconfigure(0, weight=1)
 
             pct = (m["valor_atual"] / m["valor_alvo"] * 100) if m["valor_alvo"] > 0 else 0
-            bc = self.colors.get("accent", "#00cec9") if pct < 100 else self.colors.get("green", "#00b894")
+            if pct >= 100:
+                bc = self.colors.get("green", "#00b894")
+            elif pct >= 50:
+                bc = self.colors.get("yellow", "#fdcb6e")
+            else:
+                bc = self.colors.get("red", "#d63031")
 
             bar = ctk.CTkProgressBar(bf, progress_color=bc, height=8, corner_radius=4)
             bar.grid(row=0, column=0, sticky="ew")
@@ -110,54 +151,38 @@ class MetasView(BaseView):
                           font=ctk.CTkFont(size=11),
                           text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
+            add_frame = ctk.CTkFrame(bf, fg_color="transparent")
+            add_frame.grid(row=2, column=0, sticky="ew", pady=(6, 0))
+            add_frame.grid_columnconfigure(0, weight=1)
+
+            entry_add = self._criar_entry(add_frame, "Valor...")
+            entry_add.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+
+            btn_add = ctk.CTkButton(add_frame, text="Adicionar", width=90, height=30, corner_radius=6,
+                                     font=ctk.CTkFont(size=12, weight="bold"),
+                                     fg_color=self.colors.get("green", "#00b894"), hover_color="#00a884",
+                                     command=lambda mid=m["id"], e=entry_add: self._adicionar_valor_inline(mid, e))
+            btn_add.grid(row=0, column=1)
+
             btns = ctk.CTkFrame(row, fg_color="transparent")
             btns.grid(row=0, column=2, padx=12, pady=10)
 
-            ctk.CTkButton(btns, text="+", width=32, height=32, corner_radius=6,
-                           font=ctk.CTkFont(size=14, weight="bold"),
-                           fg_color=self.colors.get("green", "#00b894"), hover_color="#00a884",
-                           command=lambda mid=m["id"], cur=m["valor_atual"], alv=m["valor_alvo"]: self._add_valor(mid, cur, alv)
-                           ).pack(side="left", padx=2)
-            ctk.CTkButton(btns, text="X", width=32, height=32, corner_radius=6,
+            btn_excluir = ctk.CTkButton(btns, text="✕", width=32, height=32, corner_radius=6,
                            font=ctk.CTkFont(size=12, weight="bold"),
                            fg_color=self.colors.get("red", "#d63031"), hover_color="#c0392b",
-                           command=lambda mid=m["id"]: self._excluir(mid)
-                           ).pack(side="left", padx=2)
-
-    def _add_valor(self, mid, atual, alvo):
-        modal = ctk.CTkToplevel(self)
-        modal.title("Adicionar Valor")
-        modal.geometry("320x170")
-        modal.configure(fg_color=self.colors.get("bg_dark", "#0f0f1a"))
-        modal.grab_set()
-
-        f = ctk.CTkFrame(modal, fg_color="transparent")
-        f.pack(fill="both", expand=True, padx=20, pady=20)
-
-        ctk.CTkLabel(f, text="Valor a adicionar:", font=ctk.CTkFont(size=13),
-                      text_color=self.colors.get("text", "#fff")).pack(anchor="w")
-        e = self._criar_entry(f, "0,00")
-        e.pack(fill="x", pady=(8, 16))
-
-        def ok():
-            val = self._validar_valor(e.get())
-            if val is None:
-                return
-            with get_connection() as conn:
-                conn.execute("UPDATE metas SET valor_atual=? WHERE id=?", (atual + val, mid))
-                conn.commit()
-            modal.destroy()
-            mostrar_toast(self, "Valor adicionado!")
-            self._atualizar()
-
-        ctk.CTkButton(f, text="Confirmar", height=36, corner_radius=8,
-                       fg_color=self.colors.get("green", "#00b894"), hover_color="#00a884",
-                       command=ok).pack(fill="x")
+                           command=lambda mid=m["id"]: self._excluir(mid))
+            btn_excluir.pack(side="left", padx=2)
+            Tooltip(btn_excluir, "Excluir meta")
 
     def _excluir(self, mid):
-        if self._confirmar_exclusao("Excluir Meta", "Deseja excluir esta meta?"):
+        if not self._confirmar_exclusao("Excluir Meta", "Deseja excluir esta meta?"):
+            return
+        try:
             with get_connection() as conn:
                 conn.execute("DELETE FROM metas WHERE id=?", (mid,))
                 conn.commit()
-            mostrar_toast(self, "Meta excluida!", "sucesso")
-            self._atualizar()
+        except Exception as e:
+            mostrar_toast(self, f"Erro ao excluir meta: {e}", "erro")
+            return
+        mostrar_toast(self, "Meta excluida!", "sucesso")
+        self._atualizar()

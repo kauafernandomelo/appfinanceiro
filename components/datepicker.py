@@ -1,17 +1,22 @@
-import customtkinter as ctk
-from datetime import datetime, timedelta
 import calendar
+from datetime import datetime
+
+import customtkinter as ctk
 
 
 class DatePicker(ctk.CTkFrame):
-    def __init__(self, master, on_select=None, **kwargs):
+    """Componente de selecao de data com calendario popup."""
+
+    def __init__(self, master, on_select=None, colors=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.on_select = on_select
+        self.colors = colors or {}
         self.selected_date = datetime.now()
 
         self.entry = ctk.CTkEntry(
             self, placeholder_text="AAAA-MM-DD", height=36, width=130,
-            corner_radius=8, fg_color="#0f0f1a", border_color="#2d2d44",
+            corner_radius=8, fg_color=self.colors.get("bg_dark", "#0f0f1a"),
+            border_color=self.colors.get("border", "#2d2d44"),
         )
         self.entry.pack(side="left")
         self.entry.insert(0, self.selected_date.strftime("%Y-%m-%d"))
@@ -19,7 +24,8 @@ class DatePicker(ctk.CTkFrame):
 
         self.btn = ctk.CTkButton(
             self, text="\U0001F4C5", width=36, height=36, corner_radius=8,
-            fg_color="#1a1a2e", hover_color="#16213e",
+            fg_color=self.colors.get("bg_card", "#1a1a2e"),
+            hover_color=self.colors.get("bg_hover", "#16213e"),
             command=self._toggle_calendar,
         )
         self.btn.pack(side="left", padx=(4, 0))
@@ -45,7 +51,7 @@ class DatePicker(ctk.CTkFrame):
         self.cal_window = ctk.CTkToplevel(self)
         self.cal_window.title("")
         self.cal_window.geometry("300x280")
-        self.cal_window.configure(fg_color="#1a1a2e")
+        self.cal_window.configure(fg_color=self.colors.get("bg_card", "#1a1a2e"))
         self.cal_window.resizable(False, False)
         self.cal_window.grab_set()
 
@@ -68,8 +74,11 @@ class DatePicker(ctk.CTkFrame):
         header = ctk.CTkFrame(self.cal_window, fg_color="transparent")
         header.pack(fill="x", padx=10, pady=(10, 5))
 
+        border = self.colors.get("border", "#2d2d44")
+        hover = self.colors.get("bg_hover", "#3d3d54")
+
         ctk.CTkButton(header, text="<", width=30, height=28, corner_radius=6,
-                       fg_color="#2d2d44", hover_color="#3d3d54",
+                       fg_color=border, hover_color=hover,
                        command=self._prev_month).pack(side="left")
 
         self.lbl_month = ctk.CTkLabel(header, text=self.selected_date.strftime("%B %Y").capitalize(),
@@ -77,7 +86,7 @@ class DatePicker(ctk.CTkFrame):
         self.lbl_month.pack(side="left", expand=True)
 
         ctk.CTkButton(header, text=">", width=30, height=28, corner_radius=6,
-                       fg_color="#2d2d44", hover_color="#3d3d54",
+                       fg_color=border, hover_color=hover,
                        command=self._next_month).pack(side="right")
 
         days_frame = ctk.CTkFrame(self.cal_window, fg_color="transparent")
@@ -85,27 +94,26 @@ class DatePicker(ctk.CTkFrame):
 
         for d in ["Se", "Te", "Qa", "Qi", "Se", "Sa", "Do"]:
             ctk.CTkLabel(days_frame, text=d, font=ctk.CTkFont(size=10, weight="bold"),
-                          text_color="#a0a0a0", width=36).grid(row=0, column=["Se","Te","Qa","Qi","Se","Sa","Do"].index(d), padx=1, pady=2)
+                          text_color=self.colors.get("text_dim", "#a0a0a0"), width=36).grid(
+                row=0, column=["Se", "Te", "Qa", "Qi", "Se", "Sa", "Do"].index(d), padx=1, pady=2)
 
         cal = calendar.monthcalendar(self.selected_date.year, self.selected_date.month)
-        today = datetime.now()
+        primary = self.colors.get("primary", "#6c5ce7")
+        primary_hover = self.colors.get("primary_hover", "#5a4bd1")
+        bg_dark = self.colors.get("bg_dark", "#0f0f1a")
 
         for week_num, week in enumerate(cal):
             for day_num, day in enumerate(week):
                 if day == 0:
                     continue
 
-                is_today = (day == today.day and self.selected_date.month == today.month
-                           and self.selected_date.year == today.year)
                 is_selected = (day == self.selected_date.day and self.selected_date.month == self.selected_date.month
                               and self.selected_date.year == self.selected_date.year)
-
-                fg = "#6c5ce7" if is_selected else "#0f0f1a"
-                text_c = "#ffffff"
+                fg = primary if is_selected else bg_dark
 
                 btn = ctk.CTkButton(
                     days_frame, text=str(day), width=36, height=28, corner_radius=6,
-                    fg_color=fg, hover_color="#5a4bd1", text_color=text_c,
+                    fg_color=fg, hover_color=primary_hover, text_color="#ffffff",
                     font=ctk.CTkFont(size=11),
                     command=lambda d=day: self._select_day(d),
                 )
@@ -115,12 +123,12 @@ class DatePicker(ctk.CTkFrame):
         bottom.pack(fill="x", padx=10, pady=(5, 10))
 
         ctk.CTkButton(bottom, text="Hoje", height=28, corner_radius=6,
-                       fg_color="#2d2d44", hover_color="#3d3d54",
+                       fg_color=border, hover_color=hover,
                        font=ctk.CTkFont(size=11),
                        command=self._go_today).pack(side="left")
 
         ctk.CTkButton(bottom, text="OK", height=28, corner_radius=6,
-                       fg_color="#6c5ce7", hover_color="#5a4bd1",
+                       fg_color=primary, hover_color=primary_hover,
                        font=ctk.CTkFont(size=11, weight="bold"),
                        command=self._confirm).pack(side="right")
 
