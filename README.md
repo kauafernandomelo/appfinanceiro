@@ -7,46 +7,42 @@ Aplicativo desktop para controle financeiro pessoal desenvolvido em Python com i
 - **Dashboard** - Visao geral com saldo, receitas e despesas do mes, navegacao por mes e grafico de evolucao temporal
 - **Receitas** - CRUD com busca, filtro por categoria, paginacao e suporte a parcelas
 - **Despesas** - CRUD com busca, filtro por categoria, paginacao e suporte a parcelas
-- **Investimentos** - Gerenciamento de investimentos com tipos (Acao, FII, Crypto, etc) e calculo de lucro/prejuizo
-- **Categorias** - Organizacao por categorias com cores personalizadas, busca e protecao contra exclusao
-- **Orcamento Mensal** - Definicao de limites por categoria com indicador visual e alertas de uso
-- **Metas de Economia** - Acompanhamento de objetivos financeiros com adicao de valor inline
-- **Contas Recorrentes** - Lancamentos que se repetem mensalmente com geracao automatica
-- **Relatorios** - Analise detalhada por periodo com graficos, exportacao PDF e CSV
-- **Configuracoes** - Backup/Restore do banco, atalhos de teclado e informacoes do app
+- **Investimentos** - Gerenciamento de investimentos com tipos e calculo de lucro/prejuizo
+- **Categorias** - Organizacao por categorias com cores personalizadas e protecao contra exclusao
+- **Orcamento Mensal** - Definicao de limites por categoria com indicador visual e alertas
+- **Metas de Economia** - Acompanhamento de objetivos com adicao de valor inline
+- **Contas Recorrentes** - Lancamentos mensais com geracao automatica
+- **Relatorios** - Analise por periodo com graficos, exportacao PDF e CSV
+- **Configuracoes** - Backup/Restore, atalhos de teclado e informacoes do app
 
-## v4.0 - Production-Grade
+## v5.0 - Dark Premium UI
 
-### Bugs Criticos Corrigidos
-- **conn.commit()** - Dados agora persistem corretamente em todas as operacoes
-- **Backup validation** - Arquivos importados sao validados antes de substituir o banco
-- **Ctrl+Shift+C** - Atalho para Recorrentes nao sobrescreve mais o Copy do sistema
-- **Tooltip cleanup** - Janelas Toplevel sao destruidas corretamente (sem memory leak)
-- **WAL mode** - SQLite com journal_mode=WAL e busy_timeout=5000
+### Design Visual
+- **Dark Premium Theme** - Paleta escura elegante com bordas sutis e elevacao
+- **Cards com borda** - Border sutil em todos os cards para profundidade visual
+- **Linhas alternadas** - Zebra-striping em todas as listas
+- **Hover effects** - Mudanca de cor ao passar o mouse nas linhas
+- **Botoes padronizados** - Primary (roxo), positive (verde), negative (vermelho)
+- **Tipografia consistente** - Escala de fontes: 24, 16, 13, 12, 11, 10
+- **Espacamento 4px grid** - Todos os espacos sao multiplos de 4
 
-### Arquitetura DRY
-- **LancamentoView** - Classe base generica para receitas/despesas (reduz 600+ linhas de duplicacao)
-- **EvolucaoTemporalChart** - Componente compartilhado entre dashboard e relatorios
-- **Constants centralizadas** - Cores, meses, versao em um unico lugar
-- **Dead code removido** - models.py e services/ nao utilizados foram removidos
+### Componentes Novos
+- **PaginationBar** - Paginacao reutilizavel com setas e info de registros
+- **EmptyState** - Componente para listas vazias com icone e texto
+- **StatusBadge** - Badge colorido para status (Receita/Despesa/Ativo/Inativo)
 
-### Seguranca e Confiabilidade
-- **Logging estruturado** - Erros salvos em logs/financeiro.log
-- **Migracao de banco** - Sistema de versionamento com db_version
-- **Versao unica** - __version__ = "4.0.0" em constants.py
-- **Validacao de valores** - Rejeita valores negativos em receitas/despesas
-- **Exception types** - sqlite3.Error e ValueError em vez de Exception generica
+### Sidebar Redesenhada
+- **Icones Unicode consistentes** - Substituem emojis por caracteres monospace
+- **Separadores de secao** - Grupos visuais no menu
+- **Indicador ativo** - Fundo destacado no item selecionado
+- **Logo "FP"** - Estilizado em vez de "$"
 
-### Performance
-- **Filtro em SQL** - WHERE + LIKE + LIMIT/OFFSET no banco (nao carrega tudo na memoria)
-- **Uma conexao por operacao** - Dashboard usa queries agregadas em vez de N+1
-- **matplotlib cleanup** - Figure.clear() + del canvas para evitar memory leak
-
-### Testes
-- **61 testes** passando (era 26)
-- **test_parcelas.py** - 12 testes de calculo de parcelas
-- **test_recorrentes.py** - 13 testes de logica de recorrentes
-- **test_integration.py** - 10 testes de integracao (commit, rollback, cascade, WAL)
+### Melhorias de Layout
+- **Dashboard cards** - 105px altura, 4px linha colorida no topo
+- **Progress bars** - 12px altura (era 8px)
+- **Botoes de acao** - 32x32px (era 26x26)
+- **Formularios** - Max 4 colunas por linha
+- **Labels** - 12px com cor secundaria
 
 ## Atalhos de Teclado
 
@@ -70,16 +66,9 @@ Aplicativo desktop para controle financeiro pessoal desenvolvido em Python com i
 - **CustomTkinter** - Interface grafica moderna
 - **Matplotlib** - Geracao de graficos
 - **ReportLab** - Exportacao PDF
-- **SQLite** - Armazenamento local de dados (WAL mode)
+- **SQLite** - Armazenamento local (WAL mode)
 
 ## Instalacao
-
-### Pre-requisitos
-
-- Python 3.11 ou superior
-- pip
-
-### Passos
 
 1. Clone o repositorio:
 ```bash
@@ -87,19 +76,12 @@ git clone https://github.com/kauafernandomelo/appfinanceiro.git
 cd appfinanceiro
 ```
 
-2. Crie um ambiente virtual:
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-```
-
-3. Instale as dependencias:
+2. Instale as dependencias:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Execute o aplicativo:
+3. Execute:
 ```bash
 python main.py
 ```
@@ -108,58 +90,48 @@ python main.py
 
 ```
 appfinanceiro/
-├── main.py                     # Ponto de entrada
-├── database.py                 # Conexao SQLite (WAL mode)
-├── constants.py                # Constantes centralizadas
-├── enums.py                    # Enums de tipos
-├── logger.py                   # Logging estruturado
-├── utils.py                    # Funcoes auxiliares
+├── main.py
+├── database.py
+├── constants.py
+├── enums.py
+├── logger.py
+├── utils.py
 ├── views/
-│   ├── dashboard.py            # Tela principal
-│   ├── receitas.py             # Subclass de LancamentoView
-│   ├── despesas.py             # Subclass de LancamentoView
-│   ├── investimentos.py        # Gerenciamento de investimentos
-│   ├── categorias.py           # Gerenciamento de categorias
-│   ├── orcamento.py            # Controle de orcamento
-│   ├── metas.py                # Metas de economia
-│   ├── recorrentes.py          # Contas recorrentes
-│   ├── relatorios.py           # Relatorios
-│   └── configuracoes.py        # Backup/Restore e configs
+│   ├── dashboard.py
+│   ├── receitas.py
+│   ├── despesas.py
+│   ├── investimentos.py
+│   ├── categorias.py
+│   ├── orcamento.py
+│   ├── metas.py
+│   ├── recorrentes.py
+│   ├── relatorios.py
+│   └── configuracoes.py
 ├── components/
-│   ├── base_view.py            # Classe base para views
-│   ├── lancamento_view.py      # View generica CRUD
-│   ├── evolucao_chart.py       # Grafico de evolucao temporal
-│   ├── sidebar.py              # Menu lateral
-│   ├── charts.py               # Graficos
-│   ├── datepicker.py           # Seletor de data
-│   ├── modals.py               # Janelas modais
-│   ├── toast.py                # Notificacoes
-│   └── tooltip.py              # Dicas
+│   ├── base_view.py
+│   ├── lancamento_view.py
+│   ├── evolucao_chart.py
+│   ├── pagination.py
+│   ├── empty_state.py
+│   ├── sidebar.py
+│   ├── charts.py
+│   ├── datepicker.py
+│   ├── modals.py
+│   ├── toast.py
+│   └── tooltip.py
 ├── tests/
-│   ├── test_utils.py           # Testes de utilitarios
-│   ├── test_database.py        # Testes de banco
-│   ├── test_parcelas.py        # Testes de parcelas
-│   ├── test_recorrentes.py     # Testes de recorrentes
-│   └── test_integration.py     # Testes de integracao
-├── .github/
-│   └── workflows/
-│       └── ci.yml              # CI/CD com GitHub Actions
-├── pyproject.toml              # Configuracao de lint/testes
-└── requirements.txt            # Dependencias
+│   ├── test_utils.py
+│   ├── test_database.py
+│   ├── test_parcelas.py
+│   ├── test_recorrentes.py
+│   └── test_integration.py
+└── pyproject.toml
 ```
 
-## Contribuicao
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
-3. Commit suas mudancas (`git commit -m 'Adicionar nova feature'`)
-4. Push para a branch (`git push origin feature/nova-feature`)
-5. Abra um Pull Request
-
-## Status do Projeto
+## Status
 
 [![CI](https://github.com/kauafernandomelo/appfinanceiro/actions/workflows/ci.yml/badge.svg)](https://github.com/kauafernandomelo/appfinanceiro/actions/workflows/ci.yml)
 
 ## Licenca
 
-Este projeto esta sob a licenca MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+MIT License

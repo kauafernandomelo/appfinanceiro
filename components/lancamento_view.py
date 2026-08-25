@@ -1,15 +1,33 @@
 import calendar
+import logging
+import sqlite3
 from datetime import datetime
 
 import customtkinter as ctk
 
 from components.base_view import BaseView
 from components.datepicker import DatePicker
+from components.empty_state import EmptyState
+from components.pagination import PaginationBar
 from components.toast import mostrar_toast
 from components.tooltip import Tooltip
-from constants import ITENS_POR_PAGINA
+from constants import (
+    ACTION_BUTTON_SIZE,
+    BUTTON_CORNER_RADIUS,
+    FONT_BODY,
+    FONT_SMALL,
+    ICONS,
+    ITENS_POR_PAGINA,
+    ROW_HEIGHT,
+    SPACING_LG,
+    SPACING_MD,
+    SPACING_SM,
+    SPACING_XS,
+)
 from database import get_connection
 from utils import formatar_moeda, obter_data_atual, validar_data
+
+logger = logging.getLogger("financeiro.lancamento_view")
 
 
 class LancamentoView(BaseView):
@@ -34,10 +52,11 @@ class LancamentoView(BaseView):
 
     def _criar_header(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 16))
+        header.grid(row=0, column=0, sticky="ew", pady=(0, SPACING_LG))
         self._criar_titulo(header, self.TITULO).pack(side="left")
         self.lbl_total = ctk.CTkLabel(
-            header, text="", font=ctk.CTkFont(size=15, weight="bold"),
+            header, text="",
+            font=ctk.CTkFont(size=15, weight="bold"),
             text_color=self.colors.get("green" if self.TIPO == "receita" else "red", self.COR),
         )
         self.lbl_total.pack(side="right")
@@ -45,52 +64,56 @@ class LancamentoView(BaseView):
 
     def _criar_formulario(self):
         form = self._criar_card_frame(self)
-        form.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        form.grid(row=1, column=0, sticky="ew", pady=(0, SPACING_MD))
         g = ctk.CTkFrame(form, fg_color="transparent")
-        g.pack(fill="x", padx=16, pady=16)
-        g.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
+        g.pack(fill="x", padx=SPACING_LG, pady=SPACING_LG)
+        g.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         placeholder_desc = "Ex: Salario, Freelance..." if self.TIPO == "receita" else "Ex: Aluguel, Supermercado..."
 
-        self._criar_label(g, "Descricao*").grid(row=0, column=0, sticky="w")
+        self._criar_label(g, "Descricao*").grid(row=0, column=0, sticky="w", pady=(0, SPACING_SM))
         self.entry_desc = self._criar_entry(g, placeholder_desc)
-        self.entry_desc.grid(row=1, column=0, sticky="ew", padx=(0, 6))
+        self.entry_desc.grid(row=1, column=0, sticky="ew", padx=(0, SPACING_SM))
 
-        self._criar_label(g, "Valor (R$)*").grid(row=0, column=1, sticky="w")
+        self._criar_label(g, "Valor (R$)*").grid(row=0, column=1, sticky="w", pady=(0, SPACING_SM))
         self.entry_valor = self._criar_entry(g, "0,00")
-        self.entry_valor.grid(row=1, column=1, sticky="ew", padx=(0, 6))
+        self.entry_valor.grid(row=1, column=1, sticky="ew", padx=(0, SPACING_SM))
 
-        self._criar_label(g, "Data*").grid(row=0, column=2, sticky="w")
+        self._criar_label(g, "Data*").grid(row=0, column=2, sticky="w", pady=(0, SPACING_SM))
         self.dp_data = DatePicker(g, colors=self.colors)
-        self.dp_data.grid(row=1, column=2, sticky="ew", padx=(0, 6))
+        self.dp_data.grid(row=1, column=2, sticky="ew", padx=(0, SPACING_SM))
 
-        self._criar_label(g, "Categoria").grid(row=0, column=3, sticky="w")
+        self._criar_label(g, "Categoria").grid(row=0, column=3, sticky="w", pady=(0, SPACING_SM))
         self.combo_cat = self._criar_combo(g, self._cats())
-        self.combo_cat.grid(row=1, column=3, sticky="ew", padx=(0, 6))
+        self.combo_cat.grid(row=1, column=3, sticky="ew")
 
+        self._criar_label(g, "Parcelas").grid(row=2, column=0, sticky="w", pady=(0, SPACING_SM))
         parcelas_frame = ctk.CTkFrame(g, fg_color="transparent")
-        parcelas_frame.grid(row=0, column=4, rowspan=2, sticky="ew", padx=(6, 0))
+        parcelas_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, SPACING_SM))
         parcelas_frame.grid_columnconfigure(1, weight=1)
 
         self.chk_parcelado = ctk.CTkCheckBox(
-            parcelas_frame, text="Parcelar?", font=ctk.CTkFont(size=11),
+            parcelas_frame, text="Parcelar?",
+            font=ctk.CTkFont(size=FONT_BODY),
             text_color=self.colors.get("text_dim", "#a0a0a0"),
             fg_color=self.colors.get("primary", "#6c5ce7"),
             hover_color=self.colors.get("primary_hover", "#5a4bd1"),
             command=self._toggle_parcelas,
         )
-        self.chk_parcelado.grid(row=0, column=0, sticky="w", padx=(0, 4))
+        self.chk_parcelado.grid(row=0, column=0, sticky="w", padx=(0, SPACING_SM))
         self.entry_parcelas = self._criar_entry(parcelas_frame, "3x")
         self.entry_parcelas.grid(row=0, column=1, sticky="ew")
         self.entry_parcelas.configure(state="disabled")
 
         self.btn_add = ctk.CTkButton(
-            g, text="+ Adicionar", height=36, corner_radius=8,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=self.COR, hover_color=self.COR_HOVER,
+            g, text=f"{ICONS['add']} Adicionar",
+            height=38, corner_radius=BUTTON_CORNER_RADIUS,
+            font=ctk.CTkFont(size=FONT_BODY, weight="bold"),
+            fg_color=self.colors.get("primary", "#6c5ce7"),
+            hover_color=self.colors.get("primary_hover", "#5a4bd1"),
             command=self._salvar,
         )
-        self.btn_add.grid(row=1, column=5, sticky="ew", padx=(6, 0))
+        self.btn_add.grid(row=3, column=2, columnspan=2, sticky="ew", padx=(SPACING_SM, 0))
 
     def _toggle_parcelas(self):
         if self.chk_parcelado.get():
@@ -100,15 +123,15 @@ class LancamentoView(BaseView):
 
     def _criar_search(self):
         search_card = self._criar_card_frame(self)
-        search_card.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        search_card.grid(row=2, column=0, sticky="ew", pady=(0, SPACING_SM))
         sg = ctk.CTkFrame(search_card, fg_color="transparent")
-        sg.pack(fill="x", padx=12, pady=8)
+        sg.pack(fill="x", padx=SPACING_MD, pady=SPACING_SM)
         sg.grid_columnconfigure(0, weight=3)
         sg.grid_columnconfigure(1, weight=1)
 
-        placeholder_search = f"Buscar {self.TIPO}..."
+        placeholder_search = f"{ICONS['search']}  Buscar {self.TIPO}..."
         self.entry_search = self._criar_entry(sg, placeholder_search)
-        self.entry_search.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.entry_search.grid(row=0, column=0, sticky="ew", padx=(0, SPACING_SM))
         self.entry_search.bind("<KeyRelease>", lambda e: self._filtrar())
 
         cats = ["Todas"] + [c for c in self._cats() if c != "Sem categoria"]
@@ -129,8 +152,9 @@ class LancamentoView(BaseView):
                     (self.CATEGORIA_TIPO,),
                 ).fetchall()
             return [c["nome"] for c in cats] if cats else ["Sem categoria"]
-        except Exception as e:
-            mostrar_toast(self, "Erro ao carregar categorias: " + str(e), "erro")
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar categorias: %s", e)
+            mostrar_toast(self, "Erro ao carregar categorias", "erro")
             return ["Sem categoria"]
 
     def _atualizar_total(self):
@@ -141,8 +165,9 @@ class LancamentoView(BaseView):
                     (obter_data_atual()[:7],),
                 ).fetchone()[0]
             self.lbl_total.configure(text=f"Total: {formatar_moeda(t)}")
-        except Exception as e:
-            mostrar_toast(self, "Erro ao calcular total: " + str(e), "erro")
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao calcular total: %s", e)
+            mostrar_toast(self, "Erro ao calcular total", "erro")
 
     def _salvar(self):
         desc = self.entry_desc.get().strip()
@@ -175,7 +200,10 @@ class LancamentoView(BaseView):
                     conn.commit()
                     mostrar_toast(self, f"{self.TITULO[:-1].title()} '{desc}' atualizada!")
                     self._edit_id = None
-                    self.btn_add.configure(text="+ Adicionar", fg_color=self.COR)
+                    self.btn_add.configure(
+                        text=f"{ICONS['add']} Adicionar",
+                        fg_color=self.colors.get("primary", "#6c5ce7"),
+                    )
                 elif parcelado:
                     n_str = self.entry_parcelas.get().replace("x", "").replace("X", "").strip()
                     if not n_str or not n_str.isdigit() or int(n_str) < 2:
@@ -218,8 +246,9 @@ class LancamentoView(BaseView):
             self.entry_parcelas.configure(state="disabled")
             self._carregar_dados()
             self._atualizar_total()
-        except Exception as e:
-            mostrar_toast(self, "Erro ao salvar: " + str(e), "erro")
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao salvar lancamento: %s", e)
+            mostrar_toast(self, "Erro ao salvar", "erro")
 
     def _editar(self, rid):
         tabela = f"{self.TIPO}s"
@@ -242,9 +271,13 @@ class LancamentoView(BaseView):
             self.dp_data.set(r["data"])
             if cat_name:
                 self.combo_cat.set(cat_name)
-            self.btn_add.configure(text="Salvar Edicao", fg_color=self.colors.get("accent", "#00cec9"))
-        except Exception as e:
-            mostrar_toast(self, f"Erro ao carregar {self.TIPO}: " + str(e), "erro")
+            self.btn_add.configure(
+                text=f"{ICONS['check']} Salvar Edicao",
+                fg_color=self.colors.get("primary", "#6c5ce7"),
+            )
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar lancamento: %s", e)
+            mostrar_toast(self, f"Erro ao carregar {self.TIPO}", "erro")
 
     def _excluir(self, rid):
         titulo_modal = f"Excluir {self.TITULO[:-1].title()}"
@@ -258,8 +291,9 @@ class LancamentoView(BaseView):
                 mostrar_toast(self, f"{self.TIPO.title()} excluida!", "sucesso")
                 self._carregar_dados()
                 self._atualizar_total()
-            except Exception as e:
-                mostrar_toast(self, "Erro ao excluir: " + str(e), "erro")
+            except (sqlite3.Error, ValueError) as e:
+                logger.error("Erro ao excluir lancamento: %s", e)
+                mostrar_toast(self, "Erro ao excluir", "erro")
 
     def _carregar_dados(self):
         busca = self.entry_search.get().strip()
@@ -297,8 +331,9 @@ class LancamentoView(BaseView):
                 rows = conn.execute(query, params).fetchall()
 
                 self._renderizar(rows, total, total_pages)
-        except Exception as e:
-            mostrar_toast(self, "Erro ao carregar dados: " + str(e), "erro")
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar dados: %s", e)
+            mostrar_toast(self, "Erro ao carregar dados", "erro")
             self._renderizar([], 0, 1)
 
     def _filtrar(self):
@@ -309,108 +344,117 @@ class LancamentoView(BaseView):
         for w in self.lista.winfo_children():
             w.destroy()
 
-        start = (self._page - 1) * ITENS_POR_PAGINA
-        end = min(start + ITENS_POR_PAGINA, total)
-
-        label_tipo = self.TIPO
-
         if not rows:
-            ctk.CTkLabel(
+            EmptyState(
                 self.lista,
-                text=f"Nenhum(a) {label_tipo} cadastrado(a)\n\nClique em '+ Adicionar' acima",
-                text_color=self.colors.get("text_dim", "#a0a0a0"),
-                font=ctk.CTkFont(size=14),
+                icone=ICONS["search"],
+                titulo=f"Nenhum(a) {self.TIPO} encontrado(a)",
+                subtitulo=f"Clique em '{ICONS['add']} Adicionar' acima para cadastrar",
+                colors=self.colors,
             ).grid(row=0, column=0, pady=60)
             return
 
-        info = ctk.CTkLabel(
+        hdr = ctk.CTkFrame(
             self.lista,
-            text=f"Mostrando {start+1}-{end} de {total} registros",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors.get("text_dim", "#a0a0b0"),
+            fg_color=self.colors.get("bg_card", "#161630"),
+            corner_radius=6, height=36,
         )
-        info.grid(row=0, column=0, sticky="w", padx=10, pady=(4, 4))
+        hdr.grid(row=0, column=0, sticky="ew", pady=(0, SPACING_SM))
+        hdr.grid_propagate(False)
 
-        hdr = ctk.CTkFrame(self.lista, fg_color="transparent")
-        hdr.grid(row=1, column=0, sticky="ew", pady=(0, 8))
-        for col, txt in enumerate(["Data", "Descricao", "Categoria", "Valor", "", ""]):
-            self._criar_label(hdr, txt, font=ctk.CTkFont(size=10, weight="bold")).grid(row=0, column=col, padx=10)
+        colunas = ["Data", "Descricao", "Categoria", "Valor", "", ""]
+        for col, txt in enumerate(colunas):
+            ctk.CTkLabel(
+                hdr, text=txt,
+                font=ctk.CTkFont(size=FONT_SMALL, weight="bold"),
+                text_color=self.colors.get("text_secondary", "#a0a0b8"),
+            ).grid(row=0, column=col, padx=12, pady=4, sticky="w")
+
+        start = (self._page - 1) * ITENS_POR_PAGINA
+        end = min(start + ITENS_POR_PAGINA, total)
 
         for i, r in enumerate(rows):
-            row_frame = ctk.CTkFrame(
-                self.lista, fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                corner_radius=8, height=42,
+            row_bg = (
+                self.colors.get("bg_card", "#161630")
+                if i % 2 == 0
+                else self.colors.get("bg_elevated", "#1e1e3a")
             )
-            row_frame.grid(row=i + 2, column=0, sticky="ew", pady=2)
+            row = ctk.CTkFrame(
+                self.lista, fg_color=row_bg,
+                corner_radius=BUTTON_CORNER_RADIUS, height=ROW_HEIGHT,
+            )
+            row.grid(row=i + 1, column=0, sticky="ew", pady=2)
+            row.grid_propagate(False)
+            row.grid_columnconfigure(1, weight=1)
 
             ctk.CTkLabel(
-                row_frame, text=r["data"], font=ctk.CTkFont(size=12),
+                row, text=r["data"],
+                font=ctk.CTkFont(size=FONT_BODY),
                 text_color=self.colors.get("text_dim", "#a0a0a0"),
-            ).grid(row=0, column=0, padx=10, pady=8, sticky="w")
+            ).grid(row=0, column=0, padx=12, pady=8, sticky="w")
 
             ctk.CTkLabel(
-                row_frame, text=r["descricao"], font=ctk.CTkFont(size=13),
-            ).grid(row=0, column=1, padx=10, pady=8, sticky="w")
+                row, text=r["descricao"],
+                font=ctk.CTkFont(size=FONT_BODY),
+                text_color=self.colors.get("text", "#f0f0f8"),
+            ).grid(row=0, column=1, padx=12, pady=8, sticky="w")
 
             ctk.CTkLabel(
-                row_frame, text=r["cat"], font=ctk.CTkFont(size=11),
+                row, text=r["cat"],
+                font=ctk.CTkFont(size=FONT_SMALL),
                 text_color=self.colors.get("text_dim", "#a0a0a0"),
-            ).grid(row=0, column=2, padx=10, pady=8, sticky="w")
+            ).grid(row=0, column=2, padx=12, pady=8, sticky="w")
 
             ctk.CTkLabel(
-                row_frame, text=formatar_moeda(r["valor"]),
-                font=ctk.CTkFont(size=13, weight="bold"),
-                text_color=self.COR,
-            ).grid(row=0, column=3, padx=10, pady=8, sticky="w")
+                row, text=formatar_moeda(r["valor"]),
+                font=ctk.CTkFont(size=FONT_BODY, weight="bold"),
+                text_color=self.colors.get("green", "#00b894") if self.TIPO == "receita"
+                else self.colors.get("red", "#d63031"),
+            ).grid(row=0, column=3, padx=12, pady=8, sticky="w")
 
             btn_edit = ctk.CTkButton(
-                row_frame, text="\u270e", width=28, height=28, corner_radius=6,
+                row, text=ICONS["edit"],
+                width=ACTION_BUTTON_SIZE, height=ACTION_BUTTON_SIZE,
+                corner_radius=BUTTON_CORNER_RADIUS,
                 font=ctk.CTkFont(size=13, weight="bold"),
-                fg_color=self.colors.get("accent", "#00cec9"), hover_color="#00a3a3",
+                fg_color=self.colors.get("primary", "#6c5ce7"),
+                hover_color=self.colors.get("primary_hover", "#5a4bd1"),
                 command=lambda rid=r["id"]: self._editar(rid),
             )
-            btn_edit.grid(row=0, column=4, padx=(10, 4), pady=8)
+            btn_edit.grid(row=0, column=4, padx=(SPACING_SM, SPACING_XS), pady=8)
             Tooltip(btn_edit, "Editar", self.colors)
 
             btn_del = ctk.CTkButton(
-                row_frame, text="\u2715", width=28, height=28, corner_radius=6,
+                row, text=ICONS["delete"],
+                width=ACTION_BUTTON_SIZE, height=ACTION_BUTTON_SIZE,
+                corner_radius=BUTTON_CORNER_RADIUS,
                 font=ctk.CTkFont(size=13, weight="bold"),
-                fg_color=self.colors.get("red", "#d63031"), hover_color="#c0392b",
+                fg_color=self.colors.get("negative", "#d63031"),
+                hover_color=self.colors.get("negative_muted", "#a32525"),
                 command=lambda rid=r["id"]: self._excluir(rid),
             )
-            btn_del.grid(row=0, column=5, padx=(4, 10), pady=8)
+            btn_del.grid(row=0, column=5, padx=(SPACING_XS, SPACING_SM), pady=8)
             Tooltip(btn_del, "Excluir", self.colors)
 
-        pag = ctk.CTkFrame(self.lista, fg_color="transparent")
-        pag.grid(row=len(rows) + 2, column=0, sticky="ew", pady=(8, 4))
+            def on_enter(e, frame=row):
+                frame.configure(fg_color=self.colors.get("bg_hover", "#252550"))
 
-        btn_prev = ctk.CTkButton(
-            pag, text="< Anterior", width=100, height=30, corner_radius=6,
-            font=ctk.CTkFont(size=11),
-            fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-            border_color=self.colors.get("border", "#2d2d44"), border_width=1,
-            hover_color=self.colors.get("bg_hover", "#16213e"),
-            command=lambda: self._mudar_pagina(-1),
-            state="disabled" if self._page <= 1 else "normal",
+            def on_leave(e, frame=row, bg=row_bg):
+                frame.configure(fg_color=bg)
+
+            row.bind("<Enter>", on_enter)
+            row.bind("<Leave>", on_leave)
+
+        pag = PaginationBar(
+            self.lista, colors=self.colors,
+            on_page_change=lambda p: self._mudar_pagina_para(p),
         )
-        btn_prev.pack(side="left", padx=10)
+        pag.grid(row=len(rows) + 2, column=0, sticky="ew", pady=(SPACING_SM, SPACING_XS))
+        pag.atualizar(self._page, total_pages, total, start + 1, end)
 
-        ctk.CTkLabel(
-            pag, text=f"Pagina {self._page} de {total_pages}",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors.get("text_dim", "#a0a0b0"),
-        ).pack(side="left", expand=True)
-
-        btn_next = ctk.CTkButton(
-            pag, text="Proximo >", width=100, height=30, corner_radius=6,
-            font=ctk.CTkFont(size=11),
-            fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-            border_color=self.colors.get("border", "#2d2d44"), border_width=1,
-            hover_color=self.colors.get("bg_hover", "#16213e"),
-            command=lambda: self._mudar_pagina(1),
-            state="disabled" if self._page >= total_pages else "normal",
-        )
-        btn_next.pack(side="right", padx=10)
+    def _mudar_pagina_para(self, page):
+        self._page = page
+        self._carregar_dados()
 
     def _mudar_pagina(self, delta):
         self._page += delta
