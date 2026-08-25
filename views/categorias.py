@@ -1,104 +1,143 @@
 import customtkinter as ctk
 from database import get_connection
 from components.toast import mostrar_toast
+from components.base_view import BaseView
 from components.modals import ConfirmarExclusaoModal
 
 
-class CategoriasView(ctk.CTkFrame):
+class CategoriasView(BaseView):
     def __init__(self, master, colors=None):
-        super().__init__(master, fg_color="transparent")
-        self.colors = colors or {}
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        super().__init__(master, colors)
+        self.grid_rowconfigure(3, weight=1)
+        self._edit_id = None
         self._criar_header()
+        self._criar_filtro()
         self._criar_formulario()
         self._criar_lista()
 
     def _criar_header(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 16))
-        ctk.CTkLabel(header, text="Categorias", font=ctk.CTkFont(size=28, weight="bold"),
-                      text_color=self.colors.get("text", "#fff")).pack(side="left")
-        conn = get_connection()
-        total = conn.execute("SELECT COUNT(*) FROM categorias").fetchone()[0]
-        conn.close()
-        ctk.CTkLabel(header, text=f"{total} categorias",
-                      font=ctk.CTkFont(size=14),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).pack(side="right")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        self._criar_titulo(header, "Categorias").pack(side="left")
+        self.lbl_count = ctk.CTkLabel(header, text="", font=ctk.CTkFont(size=14),
+                                       text_color=self.colors.get("text_dim", "#a0a0a0"))
+        self.lbl_count.pack(side="right")
+
+    def _criar_filtro(self):
+        filtro = ctk.CTkFrame(self, fg_color="transparent")
+        filtro.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+
+        self.filtro_var = ctk.StringVar(value="Todas")
+        for txt in ["Todas", "Receita", "Despesa"]:
+            ctk.CTkRadioButton(
+                filtro, text=txt, variable=self.filtro_var, value=txt,
+                font=ctk.CTkFont(size=12),
+                fg_color=self.colors.get("primary", "#6c5ce7"),
+                hover_color=self.colors.get("primary_hover", "#5a4bd1"),
+                command=self._atualizar,
+            ).pack(side="left", padx=(0, 16))
 
     def _criar_formulario(self):
-        form = ctk.CTkFrame(self, fg_color=self.colors.get("bg_card", "#1a1a2e"), corner_radius=12)
-        form.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        form = self._criar_card_frame(self)
+        form.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         g = ctk.CTkFrame(form, fg_color="transparent")
-        g.pack(fill="x", padx=16, pady=16)
+        g.pack(fill="x", padx=16, pady=14)
         g.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        ctk.CTkLabel(g, text="Nome", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=0, sticky="w")
-        self.entry_nome = ctk.CTkEntry(g, placeholder_text="Ex: Alimentacao", height=36, corner_radius=8,
-                                        fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                        border_color=self.colors.get("border", "#2d2d44"))
+        self._criar_label(g, "Nome*").grid(row=0, column=0, sticky="w")
+        self.entry_nome = self._criar_entry(g, "Ex: Alimentacao")
         self.entry_nome.grid(row=1, column=0, sticky="ew", padx=(0, 6))
 
-        ctk.CTkLabel(g, text="Tipo", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=1, sticky="w")
-        self.combo_tipo = ctk.CTkComboBox(g, values=["receita", "despesa"], height=36, corner_radius=8,
-                                           fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                           border_color=self.colors.get("border", "#2d2d44"),
-                                           button_color=self.colors.get("primary", "#6c5ce7"))
+        self._criar_label(g, "Tipo").grid(row=0, column=1, sticky="w")
+        self.combo_tipo = self._criar_combo(g, ["receita", "despesa"])
         self.combo_tipo.grid(row=1, column=1, sticky="ew", padx=(0, 6))
 
-        ctk.CTkLabel(g, text="Cor (hex)", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=2, sticky="w")
-        self.entry_cor = ctk.CTkEntry(g, placeholder_text="#6c5ce7", height=36, corner_radius=8,
-                                       fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                       border_color=self.colors.get("border", "#2d2d44"))
+        self._criar_label(g, "Cor (hex)").grid(row=0, column=2, sticky="w")
+        self.entry_cor = self._criar_entry(g, "#6c5ce7")
         self.entry_cor.insert(0, "#6c5ce7")
         self.entry_cor.grid(row=1, column=2, sticky="ew", padx=(0, 6))
 
-        ctk.CTkButton(g, text="+ Adicionar", height=36, corner_radius=8,
-                       font=ctk.CTkFont(size=13, weight="bold"),
-                       fg_color=self.colors.get("primary", "#6c5ce7"),
-                       hover_color=self.colors.get("primary_hover", "#5a4bd1"),
-                       command=self._adicionar).grid(row=1, column=3, sticky="ew")
+        self.btn_add = ctk.CTkButton(
+            g, text="+ Adicionar", height=36, corner_radius=8,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=self.colors.get("primary", "#6c5ce7"),
+            hover_color=self.colors.get("primary_hover", "#5a4bd1"),
+            command=self._salvar,
+        )
+        self.btn_add.grid(row=1, column=3, sticky="ew")
 
     def _criar_lista(self):
-        container = ctk.CTkFrame(self, fg_color=self.colors.get("bg_card", "#1a1a2e"), corner_radius=12)
-        container.grid(row=2, column=0, sticky="nsew")
-        self.lista = ctk.CTkScrollableFrame(container, fg_color="transparent",
-                                             scrollbar_button_color=self.colors.get("border", "#2d2d44"))
-        self.lista.pack(fill="both", expand=True, padx=4, pady=4)
-        self.lista.grid_columnconfigure(0, weight=1)
+        self.container, self.lista = self._criar_lista_frame(self)
+        self.container.grid(row=3, column=0, sticky="nsew")
         self._atualizar()
 
-    def _adicionar(self):
+    def _salvar(self):
         nome = self.entry_nome.get().strip()
         tipo = self.combo_tipo.get()
         cor = self.entry_cor.get().strip()
-        if not nome:
-            mostrar_toast(self, "Informe o nome da categoria", "erro")
+
+        if not self._validar_campos({"Nome": nome}):
             return
-        conn = get_connection()
-        try:
-            conn.execute("INSERT INTO categorias (nome,cor,tipo) VALUES (?,?,?)", (nome, cor, tipo))
-            conn.commit()
-            mostrar_toast(self, f"Categoria '{nome}' criada!")
-        except Exception:
-            mostrar_toast(self, "Categoria ja existe!", "erro")
-        finally:
-            conn.close()
+
+        with get_connection() as conn:
+            if self._edit_id:
+                try:
+                    conn.execute("UPDATE categorias SET nome=?,cor=?,tipo=? WHERE id=?",
+                                 (nome, cor, tipo, self._edit_id))
+                    conn.commit()
+                    mostrar_toast(self, f"Categoria '{nome}' atualizada!")
+                except Exception:
+                    mostrar_toast(self, "Nome ja existe!", "erro")
+                self._edit_id = None
+                self.btn_add.configure(text="+ Adicionar")
+            else:
+                try:
+                    conn.execute("INSERT INTO categorias (nome,cor,tipo) VALUES (?,?,?)", (nome, cor, tipo))
+                    conn.commit()
+                    mostrar_toast(self, f"Categoria '{nome}' criada!")
+                except Exception:
+                    mostrar_toast(self, "Categoria ja existe!", "erro")
+
         self.entry_nome.delete(0, "end")
+        self.entry_cor.delete(0, "end")
+        self.entry_cor.insert(0, "#6c5ce7")
         self._atualizar()
+
+    def _editar(self, cid):
+        with get_connection() as conn:
+            c = conn.execute("SELECT * FROM categorias WHERE id=?", (cid,)).fetchone()
+        if not c:
+            return
+        self._edit_id = cid
+        self.entry_nome.delete(0, "end")
+        self.entry_nome.insert(0, c["nome"])
+        self.combo_tipo.set(c["tipo"])
+        self.entry_cor.delete(0, "end")
+        self.entry_cor.insert(0, c["cor"])
+        self.btn_add.configure(text="Salvar Edicao", fg_color=self.colors.get("accent", "#00cec9"))
 
     def _atualizar(self):
         for w in self.lista.winfo_children():
             w.destroy()
-        conn = get_connection()
-        rows = conn.execute("SELECT id, nome, cor, tipo FROM categorias ORDER BY tipo, nome").fetchall()
-        conn.close()
+
+        filtro = self.filtro_var.get()
+        query = "SELECT id, nome, cor, tipo FROM categorias"
+        params = ()
+        if filtro == "Receita":
+            query += " WHERE tipo='receita'"
+        elif filtro == "Despesa":
+            query += " WHERE tipo='despesa'"
+        query += " ORDER BY tipo, nome"
+
+        with get_connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        total = len(rows)
+        self.lbl_count.configure(text=f"{total} categorias")
 
         if not rows:
-            ctk.CTkLabel(self.lista, text="Nenhuma categoria", text_color=self.colors.get("text_dim", "#a0a0a0"),
+            ctk.CTkLabel(self.lista, text="Nenhuma categoria encontrada",
+                          text_color=self.colors.get("text_dim", "#a0a0a0"),
                           font=ctk.CTkFont(size=14)).grid(row=0, column=0, pady=50)
             return
 
@@ -116,18 +155,19 @@ class CategoriasView(ctk.CTkFrame):
             ctk.CTkLabel(badge, text=c["tipo"].capitalize(), font=ctk.CTkFont(size=10, weight="bold"),
                           text_color="#fff").pack(padx=10, pady=2)
 
-            ctk.CTkButton(row, text="X", width=28, height=28, corner_radius=6,
-                           font=ctk.CTkFont(size=11, weight="bold"),
+            ctk.CTkButton(row, text="E", width=26, height=26, corner_radius=6,
+                           font=ctk.CTkFont(size=10, weight="bold"),
+                           fg_color=self.colors.get("accent", "#00cec9"), hover_color="#00a3a3",
+                           command=lambda cid=c["id"]: self._editar(cid)).grid(row=0, column=3, padx=(6, 3), pady=6)
+            ctk.CTkButton(row, text="X", width=26, height=26, corner_radius=6,
+                           font=ctk.CTkFont(size=10, weight="bold"),
                            fg_color=self.colors.get("red", "#d63031"), hover_color="#c0392b",
-                           command=lambda cid=c["id"]: self._excluir(cid)).grid(row=0, column=3, padx=10, pady=6)
+                           command=lambda cid=c["id"]: self._excluir(cid)).grid(row=0, column=4, padx=(3, 10), pady=6)
 
     def _excluir(self, cid):
-        modal = ConfirmarExclusaoModal(self, "Excluir Categoria", "Deseja excluir esta categoria?", colors=self.colors)
-        self.wait_window(modal)
-        if modal.resultado:
-            conn = get_connection()
-            conn.execute("DELETE FROM categorias WHERE id=?", (cid,))
-            conn.commit()
-            conn.close()
+        if self._confirmar_exclusao("Excluir Categoria", "Deseja excluir esta categoria?"):
+            with get_connection() as conn:
+                conn.execute("DELETE FROM categorias WHERE id=?", (cid,))
+                conn.commit()
             mostrar_toast(self, "Categoria excluida!", "sucesso")
             self._atualizar()

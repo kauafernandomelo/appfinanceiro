@@ -2,13 +2,12 @@ import customtkinter as ctk
 from database import get_connection
 from utils import formatar_moeda, obter_mes_atual
 from components.toast import mostrar_toast
+from components.base_view import BaseView
 
 
-class OrcamentoView(ctk.CTkFrame):
+class OrcamentoView(BaseView):
     def __init__(self, master, colors=None):
-        super().__init__(master, fg_color="transparent")
-        self.colors = colors or {}
-        self.grid_columnconfigure(0, weight=1)
+        super().__init__(master, colors)
         self.grid_rowconfigure(2, weight=1)
         self._criar_header()
         self._criar_formulario()
@@ -17,72 +16,60 @@ class OrcamentoView(ctk.CTkFrame):
     def _criar_header(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 16))
-        ctk.CTkLabel(header, text="Orcamento Mensal", font=ctk.CTkFont(size=28, weight="bold"),
-                      text_color=self.colors.get("text", "#fff")).pack(side="left")
+        self._criar_titulo(header, "Orcamento Mensal").pack(side="left")
         ctk.CTkLabel(header, text=obter_mes_atual(), font=ctk.CTkFont(size=14),
                       text_color=self.colors.get("text_dim", "#a0a0a0")).pack(side="right")
 
     def _criar_formulario(self):
-        form = ctk.CTkFrame(self, fg_color=self.colors.get("bg_card", "#1a1a2e"), corner_radius=12)
+        form = self._criar_card_frame(self)
         form.grid(row=1, column=0, sticky="ew", pady=(0, 12))
         g = ctk.CTkFrame(form, fg_color="transparent")
-        g.pack(fill="x", padx=16, pady=16)
+        g.pack(fill="x", padx=16, pady=14)
         g.grid_columnconfigure((0, 1, 2), weight=1)
 
-        ctk.CTkLabel(g, text="Categoria", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=0, sticky="w")
-        self.combo_cat = ctk.CTkComboBox(g, values=self._cats(), height=36, corner_radius=8,
-                                          fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                          border_color=self.colors.get("border", "#2d2d44"),
-                                          button_color=self.colors.get("primary", "#6c5ce7"))
+        self._criar_label(g, "Categoria*").grid(row=0, column=0, sticky="w")
+        self.combo_cat = self._criar_combo(g, self._cats())
         self.combo_cat.grid(row=1, column=0, sticky="ew", padx=(0, 6))
 
-        ctk.CTkLabel(g, text="Limite (R$)", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=1, sticky="w")
-        self.entry_limite = ctk.CTkEntry(g, placeholder_text="0,00", height=36, corner_radius=8,
-                                          fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                          border_color=self.colors.get("border", "#2d2d44"))
+        self._criar_label(g, "Limite (R$)*").grid(row=0, column=1, sticky="w")
+        self.entry_limite = self._criar_entry(g, "0,00")
         self.entry_limite.grid(row=1, column=1, sticky="ew", padx=(0, 6))
 
         ctk.CTkButton(g, text="Definir Limite", height=36, corner_radius=8,
                        font=ctk.CTkFont(size=13, weight="bold"),
                        fg_color=self.colors.get("yellow", "#fdcb6e"), hover_color="#e0b341",
-                       text_color="#000", command=self._adicionar).grid(row=1, column=2, sticky="ew")
+                       text_color="#000", command=self._salvar).grid(row=1, column=2, sticky="ew")
 
     def _criar_lista(self):
-        container = ctk.CTkFrame(self, fg_color=self.colors.get("bg_card", "#1a1a2e"), corner_radius=12)
-        container.grid(row=2, column=0, sticky="nsew")
-        self.lista = ctk.CTkScrollableFrame(container, fg_color="transparent",
-                                             scrollbar_button_color=self.colors.get("border", "#2d2d44"))
-        self.lista.pack(fill="both", expand=True, padx=4, pady=4)
-        self.lista.grid_columnconfigure(0, weight=1)
+        self.container, self.lista = self._criar_lista_frame(self)
+        self.container.grid(row=2, column=0, sticky="nsew")
         self._atualizar()
 
     def _cats(self):
-        conn = get_connection()
-        cats = conn.execute("SELECT nome FROM categorias WHERE tipo='despesa' ORDER BY nome").fetchall()
-        conn.close()
+        with get_connection() as conn:
+            cats = conn.execute("SELECT nome FROM categorias WHERE tipo='despesa' ORDER BY nome").fetchall()
         return [c["nome"] for c in cats] if cats else ["Sem categoria"]
 
-    def _adicionar(self):
+    def _salvar(self):
         cat = self.combo_cat.get()
-        lim = self.entry_limite.get().replace(",", ".").strip()
-        if not lim:
-            mostrar_toast(self, "Informe o limite", "erro")
+        lim_str = self.entry_limite.get().replace(",", ".").strip()
+        if not self._validar_campos({"Limite": lim_str}):
             return
-        conn = get_connection()
-        c = conn.execute("SELECT id FROM categorias WHERE nome=?", (cat,)).fetchone()
-        if not c:
-            conn.close()
+        lim = self._validar_valor(lim_str)
+        if lim is None:
             return
-        mes = obter_mes_atual()
-        ex = conn.execute("SELECT id FROM orcamento WHERE categoria_id=? AND mes=?", (c["id"], mes)).fetchone()
-        if ex:
-            conn.execute("UPDATE orcamento SET limite=? WHERE id=?", (float(lim), ex["id"]))
-        else:
-            conn.execute("INSERT INTO orcamento (categoria_id,limite,mes) VALUES (?,?,?)", (c["id"], float(lim), mes))
-        conn.commit()
-        conn.close()
+
+        with get_connection() as conn:
+            c = conn.execute("SELECT id FROM categorias WHERE nome=?", (cat,)).fetchone()
+            if not c:
+                return
+            mes = obter_mes_atual()
+            ex = conn.execute("SELECT id FROM orcamento WHERE categoria_id=? AND mes=?", (c["id"], mes)).fetchone()
+            if ex:
+                conn.execute("UPDATE orcamento SET limite=? WHERE id=?", (lim, ex["id"]))
+            else:
+                conn.execute("INSERT INTO orcamento (categoria_id,limite,mes) VALUES (?,?,?)", (c["id"], lim, mes))
+            conn.commit()
         self.entry_limite.delete(0, "end")
         mostrar_toast(self, "Orcamento atualizado!")
         self._atualizar()
@@ -90,16 +77,15 @@ class OrcamentoView(ctk.CTkFrame):
     def _atualizar(self):
         for w in self.lista.winfo_children():
             w.destroy()
-        conn = get_connection()
         mes = obter_mes_atual()
-        rows = conn.execute(
-            """SELECT o.id, COALESCE(c.nome,'Sem categoria') as cat, o.limite,
-                      COALESCE(SUM(d.valor),0) as gasto
-               FROM orcamento o
-               LEFT JOIN categorias c ON o.categoria_id=c.id
-               LEFT JOIN despesas d ON d.categoria_id=c.id AND strftime('%Y-%m',d.data)=o.mes
-               WHERE o.mes=? GROUP BY o.id""", (mes,)).fetchall()
-        conn.close()
+        with get_connection() as conn:
+            rows = conn.execute(
+                """SELECT o.id, COALESCE(c.nome,'?') as cat, o.limite,
+                          COALESCE(SUM(d.valor),0) as gasto
+                   FROM orcamento o
+                   LEFT JOIN categorias c ON o.categoria_id=c.id
+                   LEFT JOIN despesas d ON d.categoria_id=c.id AND strftime('%Y-%m',d.data)=o.mes
+                   WHERE o.mes=? GROUP BY o.id""", (mes,)).fetchall()
 
         if not rows:
             ctk.CTkLabel(self.lista, text="Nenhum orcamento definido\n\nSelecione uma categoria e defina um limite",
@@ -109,7 +95,7 @@ class OrcamentoView(ctk.CTkFrame):
 
         for i, o in enumerate(rows):
             row = ctk.CTkFrame(self.lista, fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                corner_radius=8, height=60)
+                                corner_radius=8, height=65)
             row.grid(row=i, column=0, sticky="ew", pady=4)
             row.grid_columnconfigure(1, weight=1)
 
@@ -136,9 +122,8 @@ class OrcamentoView(ctk.CTkFrame):
                            command=lambda oid=o["id"]: self._excluir(oid)).grid(row=0, column=2, padx=12, pady=10)
 
     def _excluir(self, oid):
-        conn = get_connection()
-        conn.execute("DELETE FROM orcamento WHERE id=?", (oid,))
-        conn.commit()
-        conn.close()
+        with get_connection() as conn:
+            conn.execute("DELETE FROM orcamento WHERE id=?", (oid,))
+            conn.commit()
         mostrar_toast(self, "Orcamento removido!")
         self._atualizar()

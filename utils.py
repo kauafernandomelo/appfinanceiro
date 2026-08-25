@@ -7,8 +7,7 @@ def formatar_moeda(valor: float) -> str:
 
 def formatar_data(data: str) -> str:
     try:
-        dt = datetime.strptime(data, "%Y-%m-%d")
-        return dt.strftime("%d/%m/%Y")
+        return datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
     except ValueError:
         return data
 
@@ -23,7 +22,26 @@ def obter_data_atual() -> str:
 
 def parse_data_br(data_br: str) -> str:
     try:
-        dt = datetime.strptime(data_br, "%d/%m/%Y")
-        return dt.strftime("%Y-%m-%d")
+        return datetime.strptime(data_br, "%d/%m/%Y").strftime("%Y-%m-%d")
     except ValueError:
         return data_br
+
+
+def validar_data(data: str) -> bool:
+    try:
+        datetime.strptime(data, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def validar_valor(valor: str) -> bool:
+    try:
+        float(valor.replace(",", "."))
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def parse_valor(valor: str) -> float:
+    return float(valor.replace(",", "."))

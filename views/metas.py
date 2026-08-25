@@ -2,14 +2,13 @@ import customtkinter as ctk
 from database import get_connection
 from utils import formatar_moeda
 from components.toast import mostrar_toast
+from components.base_view import BaseView
 from components.modals import ConfirmarExclusaoModal
 
 
-class MetasView(ctk.CTkFrame):
+class MetasView(BaseView):
     def __init__(self, master, colors=None):
-        super().__init__(master, fg_color="transparent")
-        self.colors = colors or {}
-        self.grid_columnconfigure(0, weight=1)
+        super().__init__(master, colors)
         self.grid_rowconfigure(2, weight=1)
         self._criar_header()
         self._criar_formulario()
@@ -18,35 +17,25 @@ class MetasView(ctk.CTkFrame):
     def _criar_header(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 16))
-        ctk.CTkLabel(header, text="Metas de Economia", font=ctk.CTkFont(size=28, weight="bold"),
-                      text_color=self.colors.get("text", "#fff")).pack(side="left")
+        self._criar_titulo(header, "Metas de Economia").pack(side="left")
 
     def _criar_formulario(self):
-        form = ctk.CTkFrame(self, fg_color=self.colors.get("bg_card", "#1a1a2e"), corner_radius=12)
+        form = self._criar_card_frame(self)
         form.grid(row=1, column=0, sticky="ew", pady=(0, 12))
         g = ctk.CTkFrame(form, fg_color="transparent")
-        g.pack(fill="x", padx=16, pady=16)
+        g.pack(fill="x", padx=16, pady=14)
         g.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        ctk.CTkLabel(g, text="Nome", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=0, sticky="w")
-        self.entry_nome = ctk.CTkEntry(g, placeholder_text="Ex: Viagem, Carro...", height=36, corner_radius=8,
-                                        fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                        border_color=self.colors.get("border", "#2d2d44"))
+        self._criar_label(g, "Nome*").grid(row=0, column=0, sticky="w")
+        self.entry_nome = self._criar_entry(g, "Ex: Viagem, Carro...")
         self.entry_nome.grid(row=1, column=0, sticky="ew", padx=(0, 6))
 
-        ctk.CTkLabel(g, text="Valor Alvo (R$)", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=1, sticky="w")
-        self.entry_valor = ctk.CTkEntry(g, placeholder_text="0,00", height=36, corner_radius=8,
-                                         fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                         border_color=self.colors.get("border", "#2d2d44"))
+        self._criar_label(g, "Valor Alvo (R$)*").grid(row=0, column=1, sticky="w")
+        self.entry_valor = self._criar_entry(g, "0,00")
         self.entry_valor.grid(row=1, column=1, sticky="ew", padx=(0, 6))
 
-        ctk.CTkLabel(g, text="Prazo", font=ctk.CTkFont(size=11),
-                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(row=0, column=2, sticky="w")
-        self.entry_prazo = ctk.CTkEntry(g, placeholder_text="AAAA-MM-DD", height=36, corner_radius=8,
-                                         fg_color=self.colors.get("bg_dark", "#0f0f1a"),
-                                         border_color=self.colors.get("border", "#2d2d44"))
+        self._criar_label(g, "Prazo*").grid(row=0, column=2, sticky="w")
+        self.entry_prazo = self._criar_entry(g, "AAAA-MM-DD")
         self.entry_prazo.grid(row=1, column=2, sticky="ew", padx=(0, 6))
 
         ctk.CTkButton(g, text="+ Criar Meta", height=36, corner_radius=8,
@@ -56,26 +45,25 @@ class MetasView(ctk.CTkFrame):
                        command=self._adicionar).grid(row=1, column=3, sticky="ew")
 
     def _criar_lista(self):
-        container = ctk.CTkFrame(self, fg_color=self.colors.get("bg_card", "#1a1a2e"), corner_radius=12)
-        container.grid(row=2, column=0, sticky="nsew")
-        self.lista = ctk.CTkScrollableFrame(container, fg_color="transparent",
-                                             scrollbar_button_color=self.colors.get("border", "#2d2d44"))
-        self.lista.pack(fill="both", expand=True, padx=4, pady=4)
-        self.lista.grid_columnconfigure(0, weight=1)
+        self.container, self.lista = self._criar_lista_frame(self)
+        self.container.grid(row=2, column=0, sticky="nsew")
         self._atualizar()
 
     def _adicionar(self):
         nome = self.entry_nome.get().strip()
-        val = self.entry_valor.get().replace(",", ".").strip()
+        val_str = self.entry_valor.get().replace(",", ".").strip()
         prazo = self.entry_prazo.get().strip()
-        if not nome or not val:
-            mostrar_toast(self, "Preencha nome e valor", "erro")
+
+        if not self._validar_campos({"Nome": nome, "Valor": val_str, "Prazo": prazo}):
             return
-        conn = get_connection()
-        conn.execute("INSERT INTO metas (nome,valor_alvo,valor_atual,prazo) VALUES (?, ?, 0, ?)",
-                     (nome, float(val), prazo))
-        conn.commit()
-        conn.close()
+        val = self._validar_valor(val_str)
+        if val is None:
+            return
+
+        with get_connection() as conn:
+            conn.execute("INSERT INTO metas (nome,valor_alvo,valor_atual,prazo) VALUES (?, ?, 0, ?)",
+                         (nome, val, prazo))
+            conn.commit()
         self.entry_nome.delete(0, "end")
         self.entry_valor.delete(0, "end")
         self.entry_prazo.delete(0, "end")
@@ -85,9 +73,9 @@ class MetasView(ctk.CTkFrame):
     def _atualizar(self):
         for w in self.lista.winfo_children():
             w.destroy()
-        conn = get_connection()
-        rows = conn.execute("SELECT id,nome,valor_alvo,valor_atual,prazo FROM metas ORDER BY prazo").fetchall()
-        conn.close()
+
+        with get_connection() as conn:
+            rows = conn.execute("SELECT id,nome,valor_alvo,valor_atual,prazo FROM metas ORDER BY prazo").fetchall()
 
         if not rows:
             ctk.CTkLabel(self.lista, text="Nenhuma meta criada\n\nCrie uma meta para comecar a economizar!",
@@ -148,35 +136,28 @@ class MetasView(ctk.CTkFrame):
 
         ctk.CTkLabel(f, text="Valor a adicionar:", font=ctk.CTkFont(size=13),
                       text_color=self.colors.get("text", "#fff")).pack(anchor="w")
-        e = ctk.CTkEntry(f, placeholder_text="0,00", height=36, corner_radius=8,
-                          fg_color=self.colors.get("bg_card", "#1a1a2e"),
-                          border_color=self.colors.get("border", "#2d2d44"))
+        e = self._criar_entry(f, "0,00")
         e.pack(fill="x", pady=(8, 16))
 
         def ok():
-            try:
-                v = float(e.get().replace(",", "."))
-                conn = get_connection()
-                conn.execute("UPDATE metas SET valor_atual=? WHERE id=?", (atual + v, mid))
+            val = self._validar_valor(e.get())
+            if val is None:
+                return
+            with get_connection() as conn:
+                conn.execute("UPDATE metas SET valor_atual=? WHERE id=?", (atual + val, mid))
                 conn.commit()
-                conn.close()
-                modal.destroy()
-                mostrar_toast(self, "Valor adicionado a meta!")
-                self._atualizar()
-            except ValueError:
-                mostrar_toast(self, "Valor invalido", "erro")
+            modal.destroy()
+            mostrar_toast(self, "Valor adicionado!")
+            self._atualizar()
 
         ctk.CTkButton(f, text="Confirmar", height=36, corner_radius=8,
                        fg_color=self.colors.get("green", "#00b894"), hover_color="#00a884",
                        command=ok).pack(fill="x")
 
     def _excluir(self, mid):
-        modal = ConfirmarExclusaoModal(self, "Excluir Meta", "Deseja excluir esta meta?", colors=self.colors)
-        self.wait_window(modal)
-        if modal.resultado:
-            conn = get_connection()
-            conn.execute("DELETE FROM metas WHERE id=?", (mid,))
-            conn.commit()
-            conn.close()
+        if self._confirmar_exclusao("Excluir Meta", "Deseja excluir esta meta?"):
+            with get_connection() as conn:
+                conn.execute("DELETE FROM metas WHERE id=?", (mid,))
+                conn.commit()
             mostrar_toast(self, "Meta excluida!", "sucesso")
             self._atualizar()
