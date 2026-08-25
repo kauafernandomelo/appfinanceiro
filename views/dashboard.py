@@ -1,18 +1,18 @@
+import logging
+
 import customtkinter as ctk
 import matplotlib
 
 matplotlib.use("Agg")
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
 
 from components.base_view import BaseView
 from components.charts import ChartWidget
+from components.evolucao_chart import EvolucaoTemporalChart
+from constants import MESES_PT
 from database import get_connection
-from enums import MESES_PT
 from utils import formatar_moeda
 
-MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
-               "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+logger = logging.getLogger("financeiro.dashboard")
 
 
 class DashboardView(BaseView):
@@ -87,7 +87,7 @@ class DashboardView(BaseView):
     def _refresh(self):
         self._atualizar_cards()
         self._atualizar_graficos()
-        self._atualizar_evolucao_temporal()
+        self.evolucao_chart.atualizar(self.colors)
         self._atualizar_ultimos()
 
     def _criar_cards(self):
@@ -164,93 +164,15 @@ class DashboardView(BaseView):
             c2.criar_grafico_pizza(list(dados["receitas"].keys()), list(dados["receitas"].values()), "")
 
     def _criar_evolucao_temporal(self):
-        self.evolucao_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.evolucao_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
-        self.evolucao_frame.grid_columnconfigure(0, weight=1)
-        self.evolucao_frame.grid_rowconfigure(0, weight=1)
-        self._atualizar_evolucao_temporal()
-
-    def _atualizar_evolucao_temporal(self):
-        for w in self.evolucao_frame.winfo_children():
-            w.destroy()
-
-        card = self._criar_card_frame(self.evolucao_frame)
-        card.grid(row=0, column=0, sticky="nsew")
-        ctk.CTkLabel(card, text="  Evolucao Temporal - Receitas vs Despesas",
+        self.evolucao_container = self._criar_card_frame(self)
+        self.evolucao_container.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        self.evolucao_container.grid_columnconfigure(0, weight=1)
+        self.evolucao_container.grid_rowconfigure(1, weight=1)
+        ctk.CTkLabel(self.evolucao_container, text="  Evolucao Temporal - Receitas vs Despesas",
                       font=ctk.CTkFont(size=13, weight="bold"),
                       text_color=self.colors.get("text", "#fff"), anchor="w").pack(fill="x", padx=16, pady=(12, 0))
-
-        try:
-            meses_labels, receitas_valores, despesas_valores = self._dados_evolucao_temporal()
-        except Exception:
-            meses_labels = MESES_ABREV[-6:]
-            receitas_valores = [0] * 6
-            despesas_valores = [0] * 6
-
-        fig = Figure(figsize=(10, 3.5), dpi=100, facecolor="#1a1a2e")
-        ax = fig.add_subplot(111)
-        ax.set_facecolor("#1a1a2e")
-
-        ax.plot(meses_labels, receitas_valores, color="#00b894", linewidth=2.5, marker="o",
-                markersize=6, label="Receitas", zorder=5)
-        ax.fill_between(range(len(meses_labels)), receitas_valores, alpha=0.1, color="#00b894")
-
-        ax.plot(meses_labels, despesas_valores, color="#d63031", linewidth=2.5, marker="o",
-                markersize=6, label="Despesas", zorder=5)
-        ax.fill_between(range(len(meses_labels)), despesas_valores, alpha=0.1, color="#d63031")
-
-        ax.set_title("Receitas vs Despesas - Ultimos 6 Meses", color="white", fontsize=11, pad=10)
-        ax.tick_params(colors="white", labelsize=9)
-        ax.spines["bottom"].set_color("#2d2d44")
-        ax.spines["left"].set_color("#2d2d44")
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.legend(loc="upper left", fontsize=9, facecolor="#1a1a2e", edgecolor="#2d2d44",
-                  labelcolor="white")
-        ax.set_xlim(-0.5, len(meses_labels) - 0.5)
-        ax.grid(axis="y", color="#2d2d44", linestyle="--", alpha=0.5)
-
-        fig.tight_layout()
-
-        canvas = FigureCanvasTkAgg(fig, master=card)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True, padx=8, pady=(4, 12))
-
-    def _dados_evolucao_temporal(self):
-        import datetime
-        now = datetime.datetime.now()
-        meses_labels = []
-        receitas_valores = []
-        despesas_valores = []
-
-        for i in range(5, -1, -1):
-            mes = now.month - i
-            ano = now.year
-            while mes <= 0:
-                mes += 12
-                ano -= 1
-
-            meses_labels.append(MESES_ABREV[mes - 1])
-            mes_str = f"{ano}-{mes:02d}"
-
-            try:
-                with get_connection() as conn:
-                    receita = conn.execute(
-                        "SELECT COALESCE(SUM(valor),0) FROM receitas WHERE strftime('%Y-%m',data)=?",
-                        (mes_str,)
-                    ).fetchone()[0]
-                    despesa = conn.execute(
-                        "SELECT COALESCE(SUM(valor),0) FROM despesas WHERE strftime('%Y-%m',data)=?",
-                        (mes_str,)
-                    ).fetchone()[0]
-            except Exception:
-                receita = 0
-                despesa = 0
-
-            receitas_valores.append(float(receita))
-            despesas_valores.append(float(despesa))
-
-        return meses_labels, receitas_valores, despesas_valores
+        self.evolucao_chart = EvolucaoTemporalChart(self.evolucao_container, colors=self.colors, meses=6)
+        self.evolucao_chart.pack(fill="both", expand=True, padx=8, pady=(4, 12))
 
     def _criar_ultimos(self):
         self.ultimos_container = self._criar_card_frame(self)
@@ -311,6 +233,7 @@ class DashboardView(BaseView):
                                         (mes_str,)).fetchone()[0]
                 inv = conn.execute("SELECT COALESCE(SUM(valor_atual),0) FROM investimentos").fetchone()[0]
         except Exception:
+            logger.error("Erro ao carregar dados do dashboard")
             receitas = 0
             despesas = 0
             inv = 0

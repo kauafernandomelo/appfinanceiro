@@ -26,6 +26,9 @@ class Tooltip(ctk.CTkToplevel):
         widget.bind("<Leave>", self._hide, add="+")
         widget.bind("<ButtonPress>", self._hide, add="+")
 
+        # Cleanup on parent destroy
+        widget.bind("<Destroy>", self._cleanup, add="+")
+
     def _show(self, event=None):
         if self._visible:
             return
@@ -43,3 +46,12 @@ class Tooltip(ctk.CTkToplevel):
             return
         self.withdraw()
         self._visible = False
+
+    def _cleanup(self, event=None):
+        """Destroi o tooltip quando o widget pai e destruido."""
+        try:
+            self._visible = False
+            if self.winfo_exists():
+                self.destroy()
+        except Exception:
+            pass

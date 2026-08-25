@@ -24,9 +24,11 @@ CATEGORIAS_PADRAO = [
 
 @contextmanager
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     try:
         yield conn
     finally:
@@ -107,4 +109,21 @@ def init_db() -> None:
                 "INSERT INTO categorias (nome, cor, tipo) VALUES (?, ?, ?)",
                 CATEGORIAS_PADRAO,
             )
+        conn.commit()
+
+        # Sistema de migracao simples
+        conn.execute("CREATE TABLE IF NOT EXISTS db_version (version INTEGER)")
+        current = conn.execute("SELECT version FROM db_version").fetchone()
+        if current is None:
+            conn.execute("INSERT INTO db_version (version) VALUES (1)")
+            conn.commit()
+
+        # Verificar e executar migracoes
+        current_version = conn.execute("SELECT version FROM db_version").fetchone()[0]
+
+        if current_version < 2:
+            pass
+            # conn.execute("ALTER TABLE ...")
+            # conn.execute("UPDATE db_version SET version = 2")
+
         conn.commit()

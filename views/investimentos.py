@@ -1,14 +1,18 @@
+import logging
+import sqlite3
+
 import customtkinter as ctk
 
 from components.base_view import BaseView
 from components.datepicker import DatePicker
 from components.toast import mostrar_toast
 from components.tooltip import Tooltip
+from constants import ITENS_POR_PAGINA
 from database import get_connection
 from enums import TipoInvestimento
 from utils import formatar_moeda, obter_data_atual
 
-ITENS_POR_PAGINA = 15
+logger = logging.getLogger("financeiro.investimentos")
 
 
 class InvestimentosView(BaseView):
@@ -135,7 +139,8 @@ class InvestimentosView(BaseView):
         try:
             with get_connection() as conn:
                 rows = conn.execute("SELECT valor_investido, valor_atual FROM investimentos").fetchall()
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar resumo: %s", e)
             mostrar_toast(self, "Erro ao carregar resumo.", "erro")
             return {"inv": 0, "atu": 0}
         inv = sum(r["valor_investido"] for r in rows)
@@ -156,7 +161,8 @@ class InvestimentosView(BaseView):
         try:
             with get_connection() as conn:
                 total = self._contar_total(conn)
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao contar investimentos: %s", e)
             return
         max_paginas = max(0, (total - 1) // ITENS_POR_PAGINA)
         if self._pagina_atual < max_paginas:
@@ -191,6 +197,7 @@ class InvestimentosView(BaseView):
                     conn.execute(
                         "UPDATE investimentos SET nome=?,tipo=?,valor_investido=?,valor_atual=?,data=? WHERE id=?",
                         (nome, tipo, val_inv, val_atu, data, self._edit_id))
+                    conn.commit()
                     mostrar_toast(self, f"'{nome}' atualizado!")
                     self._edit_id = None
                     self.btn_add.configure(text="+ Adicionar", fg_color=self.colors.get("green", "#00b894"))
@@ -198,8 +205,10 @@ class InvestimentosView(BaseView):
                     conn.execute(
                         "INSERT INTO investimentos (nome,tipo,valor_investido,valor_atual,data) VALUES (?,?,?,?,?)",
                         (nome, tipo, val_inv, val_atu, data))
+                    conn.commit()
                     mostrar_toast(self, f"'{nome}' adicionado!")
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao salvar investimento: %s", e)
             mostrar_toast(self, f"Erro ao salvar: {e}", "erro")
             return
 
@@ -214,7 +223,8 @@ class InvestimentosView(BaseView):
         try:
             with get_connection() as conn:
                 r = conn.execute("SELECT * FROM investimentos WHERE id=?", (rid,)).fetchone()
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar investimento: %s", e)
             mostrar_toast(self, "Erro ao carregar investimento.", "erro")
             return
         if not r:
@@ -245,7 +255,8 @@ class InvestimentosView(BaseView):
                 query += " ORDER BY data DESC LIMIT ? OFFSET ?"
                 params = params + (ITENS_POR_PAGINA, self._pagina_atual * ITENS_POR_PAGINA)
                 rows = conn.execute(query, params).fetchall()
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar investimentos: %s", e)
             mostrar_toast(self, "Erro ao carregar investimentos.", "erro")
             return
 
@@ -313,5 +324,6 @@ class InvestimentosView(BaseView):
                 mostrar_toast(self, "Investimento excluido!", "sucesso")
                 self._atualizar_cards()
                 self._atualizar()
-            except Exception as e:
+            except (sqlite3.Error, ValueError) as e:
+                logger.error("Erro ao excluir investimento: %s", e)
                 mostrar_toast(self, f"Erro ao excluir: {e}", "erro")

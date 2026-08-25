@@ -115,13 +115,46 @@ class ConfiguracoesView(BaseView):
 
     def _importar_backup(self):
         try:
+            import sqlite3 as sq
             from tkinter import filedialog
+
             filepath = filedialog.askopenfilename(
                 title="Selecionar backup",
                 filetypes=[("SQLite Database", "*.db"), ("Todos os arquivos", "*.*")],
             )
             if not filepath:
                 return
+
+            # Validar que e um SQLite valido
+            try:
+                test_conn = sq.connect(filepath)
+                integrity = test_conn.execute("PRAGMA integrity_check").fetchone()[0]
+                if integrity != "ok":
+                    mostrar_toast(self, "Arquivo corrompido! Integrity check falhou.", "erro")
+                    test_conn.close()
+                    return
+
+                # Verificar tabelas esperadas
+                tables = [r[0] for r in test_conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()]
+                required = {"categorias", "receitas", "despesas", "investimentos"}
+                if not required.issubset(set(tables)):
+                    missing = required - set(tables)
+                    mostrar_toast(self, f"Tabelas faltando: {', '.join(missing)}", "erro")
+                    test_conn.close()
+                    return
+
+                test_conn.close()
+            except Exception as e:
+                mostrar_toast(self, f"Arquivo invalido: {e}", "erro")
+                return
+
+            # Criar backup do banco atual antes de substituir
+            backup_path = str(DB_PATH) + ".backup"
+            shutil.copy2(str(DB_PATH), backup_path)
+
+            # Copiar o novo banco
             shutil.copy2(filepath, str(DB_PATH))
             mostrar_toast(self, "Backup importado com sucesso! Reinicie o app.", "sucesso")
         except Exception as e:

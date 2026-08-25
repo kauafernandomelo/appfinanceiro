@@ -1,10 +1,16 @@
+import logging
+import sqlite3
+
 import customtkinter as ctk
 
 from components.base_view import BaseView
+from components.datepicker import DatePicker
 from components.toast import mostrar_toast
 from components.tooltip import Tooltip
 from database import get_connection
 from utils import formatar_moeda
+
+logger = logging.getLogger("financeiro.metas")
 
 
 class MetasView(BaseView):
@@ -36,8 +42,8 @@ class MetasView(BaseView):
         self.entry_valor.grid(row=1, column=1, sticky="ew", padx=(0, 6))
 
         self._criar_label(g, "Prazo*").grid(row=0, column=2, sticky="w")
-        self.entry_prazo = self._criar_entry(g, "AAAA-MM-DD")
-        self.entry_prazo.grid(row=1, column=2, sticky="ew", padx=(0, 6))
+        self.dp_prazo = DatePicker(g)
+        self.dp_prazo.grid(row=1, column=2, sticky="ew", padx=(0, 6))
 
         ctk.CTkButton(g, text="+ Criar Meta", height=36, corner_radius=8,
                        font=ctk.CTkFont(size=13, weight="bold"),
@@ -53,7 +59,7 @@ class MetasView(BaseView):
     def _adicionar(self):
         nome = self.entry_nome.get().strip()
         val_str = self.entry_valor.get().replace(",", ".").strip()
-        prazo = self.entry_prazo.get().strip()
+        prazo = self.dp_prazo.get()
 
         if not self._validar_campos({"Nome": nome, "Valor": val_str, "Prazo": prazo}):
             return
@@ -66,13 +72,13 @@ class MetasView(BaseView):
                 conn.execute("INSERT INTO metas (nome,valor_alvo,valor_atual,prazo) VALUES (?, ?, 0, ?)",
                              (nome, val, prazo))
                 conn.commit()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao criar meta: %s", e)
             mostrar_toast(self, f"Erro ao criar meta: {e}", "erro")
             return
 
         self.entry_nome.delete(0, "end")
         self.entry_valor.delete(0, "end")
-        self.entry_prazo.delete(0, "end")
         mostrar_toast(self, f"Meta '{nome}' criada!")
         self._atualizar()
 
@@ -94,7 +100,8 @@ class MetasView(BaseView):
                 novo_valor = atual["valor_atual"] + val
                 conn.execute("UPDATE metas SET valor_atual=? WHERE id=?", (novo_valor, mid))
                 conn.commit()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao adicionar valor: %s", e)
             mostrar_toast(self, f"Erro ao adicionar valor: {e}", "erro")
             return
 
@@ -109,7 +116,8 @@ class MetasView(BaseView):
         try:
             with get_connection() as conn:
                 rows = conn.execute("SELECT id,nome,valor_alvo,valor_atual,prazo FROM metas ORDER BY prazo").fetchall()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar metas: %s", e)
             mostrar_toast(self, f"Erro ao carregar metas: {e}", "erro")
             return
 
@@ -181,7 +189,8 @@ class MetasView(BaseView):
             with get_connection() as conn:
                 conn.execute("DELETE FROM metas WHERE id=?", (mid,))
                 conn.commit()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao excluir meta: %s", e)
             mostrar_toast(self, f"Erro ao excluir meta: {e}", "erro")
             return
         mostrar_toast(self, "Meta excluida!", "sucesso")

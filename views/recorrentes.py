@@ -1,14 +1,17 @@
 import calendar
+import logging
+import sqlite3
 from datetime import datetime
 
 import customtkinter as ctk
 
 from components.base_view import BaseView
 from components.toast import mostrar_toast
+from constants import ITENS_POR_PAGINA
 from database import get_connection
 from utils import formatar_moeda, obter_mes_atual
 
-ITENS_POR_PAGINA = 10
+logger = logging.getLogger("financeiro.recorrentes")
 
 
 class RecorrentesView(BaseView):
@@ -140,7 +143,8 @@ class RecorrentesView(BaseView):
                     "SELECT nome FROM categorias ORDER BY nome"
                 ).fetchall()
             return [c["nome"] for c in cats] if cats else ["Sem categoria"]
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar categorias: %s", e)
             return ["Sem categoria"]
 
     def _on_busca(self):
@@ -214,7 +218,8 @@ class RecorrentesView(BaseView):
                     (desc, val, tipo, cid, dia_int),
                 )
                 conn.commit()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao adicionar recorrente: %s", e)
             mostrar_toast(self, f"Erro ao adicionar: {e}", "erro")
             return
 
@@ -265,7 +270,8 @@ class RecorrentesView(BaseView):
                 conn.commit()
 
             mostrar_toast(self, f"{gerados} lancamentos gerados para {mes}!")
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao gerar lancamentos: %s", e)
             mostrar_toast(self, f"Erro ao gerar lancamentos: {e}", "erro")
 
     def _atualizar(self):
@@ -281,7 +287,8 @@ class RecorrentesView(BaseView):
                     "FROM recorrentes r LEFT JOIN categorias c ON r.categoria_id=c.id "
                     "ORDER BY r.tipo, r.dia_mes"
                 ).fetchall()
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar recorrentes: %s", e)
             self._todos_registros = []
 
         registros_filtrados = self._filtrar_registros(self._todos_registros)
@@ -431,7 +438,8 @@ class RecorrentesView(BaseView):
                 conn.commit()
             mostrar_toast(self, "Status atualizado!")
             self._atualizar()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao atualizar recorrente: %s", e)
             mostrar_toast(self, f"Erro ao atualizar: {e}", "erro")
 
     def _excluir(self, rid):
@@ -445,5 +453,6 @@ class RecorrentesView(BaseView):
                     conn.commit()
                 mostrar_toast(self, "Conta excluida!", "sucesso")
                 self._atualizar()
-            except Exception as e:
+            except (sqlite3.Error, ValueError) as e:
+                logger.error("Erro ao excluir recorrente: %s", e)
                 mostrar_toast(self, f"Erro ao excluir: {e}", "erro")

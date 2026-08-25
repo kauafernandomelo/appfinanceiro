@@ -15,23 +15,38 @@ Aplicativo desktop para controle financeiro pessoal desenvolvido em Python com i
 - **Relatorios** - Analise detalhada por periodo com graficos, exportacao PDF e CSV
 - **Configuracoes** - Backup/Restore do banco, atalhos de teclado e informacoes do app
 
-## Melhorias v3.0
+## v4.0 - Production-Grade
 
-- **Tema Dark/Light** - Alterne entre temas claro e escuro
-- **Sidebar Colapsavel** - Minimize a sidebar para mostrar apenas icones
-- **Busca e Filtros** - Busca por descricao e filtro por categoria em todas as listas
-- **Paginacao** - Listas paginadas com 15 itens por pagina
-- **Lancamentos Parcelados** - Divida compras em N parcelas mensais
-- **Grafico de Evolucao Temporal** - Visualize receitas vs despesas nos ultimos 6 meses
-- **Exportacao CSV** - Exporte relatorios em formato CSV
-- **Backup/Restore** - Exporte e importe backups do banco de dados
-- **Alertas de Orcamento** - Notificacoes quando o orcamento atinge 80% ou 100%
-- **Tooltips** - Dicas em todos os botoes de acao
-- **Icones Unicode** - Botoes de editar/excluir com icones visuais
-- **Tratamento de Erros** - Mensagens de erro em todas as operacoes de banco
-- **Anos Bissextos** - Calculo correto de dias para fevereiro
-- **ON DELETE CASCADE** - Integridade referencial nas foreign keys
-- **Enums** - Tipos como枚 em vez de strings
+### Bugs Criticos Corrigidos
+- **conn.commit()** - Dados agora persistem corretamente em todas as operacoes
+- **Backup validation** - Arquivos importados sao validados antes de substituir o banco
+- **Ctrl+Shift+C** - Atalho para Recorrentes nao sobrescreve mais o Copy do sistema
+- **Tooltip cleanup** - Janelas Toplevel sao destruidas corretamente (sem memory leak)
+- **WAL mode** - SQLite com journal_mode=WAL e busy_timeout=5000
+
+### Arquitetura DRY
+- **LancamentoView** - Classe base generica para receitas/despesas (reduz 600+ linhas de duplicacao)
+- **EvolucaoTemporalChart** - Componente compartilhado entre dashboard e relatorios
+- **Constants centralizadas** - Cores, meses, versao em um unico lugar
+- **Dead code removido** - models.py e services/ nao utilizados foram removidos
+
+### Seguranca e Confiabilidade
+- **Logging estruturado** - Erros salvos em logs/financeiro.log
+- **Migracao de banco** - Sistema de versionamento com db_version
+- **Versao unica** - __version__ = "4.0.0" em constants.py
+- **Validacao de valores** - Rejeita valores negativos em receitas/despesas
+- **Exception types** - sqlite3.Error e ValueError em vez de Exception generica
+
+### Performance
+- **Filtro em SQL** - WHERE + LIKE + LIMIT/OFFSET no banco (nao carrega tudo na memoria)
+- **Uma conexao por operacao** - Dashboard usa queries agregadas em vez de N+1
+- **matplotlib cleanup** - Figure.clear() + del canvas para evitar memory leak
+
+### Testes
+- **61 testes** passando (era 26)
+- **test_parcelas.py** - 12 testes de calculo de parcelas
+- **test_recorrentes.py** - 13 testes de logica de recorrentes
+- **test_integration.py** - 10 testes de integracao (commit, rollback, cascade, WAL)
 
 ## Atalhos de Teclado
 
@@ -44,7 +59,7 @@ Aplicativo desktop para controle financeiro pessoal desenvolvido em Python com i
 | Ctrl+B | Ir para Categorias |
 | Ctrl+O | Ir para Orcamento |
 | Ctrl+M | Ir para Metas |
-| Ctrl+C | Ir para Recorrentes |
+| Ctrl+Shift+C | Ir para Recorrentes |
 | Ctrl+T | Ir para Configuracoes |
 | Ctrl+L | Ir para Relatorios |
 | Esc | Voltar ao Dashboard |
@@ -55,7 +70,7 @@ Aplicativo desktop para controle financeiro pessoal desenvolvido em Python com i
 - **CustomTkinter** - Interface grafica moderna
 - **Matplotlib** - Geracao de graficos
 - **ReportLab** - Exportacao PDF
-- **SQLite** - Armazenamento local de dados
+- **SQLite** - Armazenamento local de dados (WAL mode)
 
 ## Instalacao
 
@@ -93,39 +108,44 @@ python main.py
 
 ```
 appfinanceiro/
-├── main.py                 # Ponto de entrada
-├── database.py             # Conexao e migrations do SQLite
-├── models.py               # Modelos de dados
-├── utils.py                # Funcoes auxiliares
-├── enums.py                # Enums de tipos
-├── pyproject.toml          # Configuracao de lint
+├── main.py                     # Ponto de entrada
+├── database.py                 # Conexao SQLite (WAL mode)
+├── constants.py                # Constantes centralizadas
+├── enums.py                    # Enums de tipos
+├── logger.py                   # Logging estruturado
+├── utils.py                    # Funcoes auxiliares
 ├── views/
-│   ├── dashboard.py        # Tela principal
-│   ├── receitas.py         # Gerenciamento de receitas
-│   ├── despesas.py         # Gerenciamento de despesas
-│   ├── categorias.py       # Gerenciamento de categorias
-│   ├── orcamento.py        # Controle de orcamento
-│   ├── metas.py            # Metas de economia
-│   ├── recorrentes.py      # Contas recorrentes
-│   ├── relatorios.py       # Relatorios
-│   └── configuracoes.py    # Configuracoes do app
+│   ├── dashboard.py            # Tela principal
+│   ├── receitas.py             # Subclass de LancamentoView
+│   ├── despesas.py             # Subclass de LancamentoView
+│   ├── investimentos.py        # Gerenciamento de investimentos
+│   ├── categorias.py           # Gerenciamento de categorias
+│   ├── orcamento.py            # Controle de orcamento
+│   ├── metas.py                # Metas de economia
+│   ├── recorrentes.py          # Contas recorrentes
+│   ├── relatorios.py           # Relatorios
+│   └── configuracoes.py        # Backup/Restore e configs
 ├── components/
-│   ├── base_view.py        # Classe base para views
-│   ├── sidebar.py          # Menu lateral
-│   ├── charts.py           # Graficos
-│   ├── datepicker.py       # Seletor de data
-│   ├── modals.py           # Janelas modais
-│   ├── toast.py            # Notificacoes
-│   └── tooltip.py          # Dicas
-├── services/
-│   └── receitas_repository.py  # Repository de receitas
+│   ├── base_view.py            # Classe base para views
+│   ├── lancamento_view.py      # View generica CRUD
+│   ├── evolucao_chart.py       # Grafico de evolucao temporal
+│   ├── sidebar.py              # Menu lateral
+│   ├── charts.py               # Graficos
+│   ├── datepicker.py           # Seletor de data
+│   ├── modals.py               # Janelas modais
+│   ├── toast.py                # Notificacoes
+│   └── tooltip.py              # Dicas
 ├── tests/
-│   ├── test_utils.py       # Testes de utilitarios
-│   └── test_database.py    # Testes de banco
+│   ├── test_utils.py           # Testes de utilitarios
+│   ├── test_database.py        # Testes de banco
+│   ├── test_parcelas.py        # Testes de parcelas
+│   ├── test_recorrentes.py     # Testes de recorrentes
+│   └── test_integration.py     # Testes de integracao
 ├── .github/
 │   └── workflows/
-│       └── ci.yml          # CI/CD com GitHub Actions
-└── requirements.txt        # Dependencias
+│       └── ci.yml              # CI/CD com GitHub Actions
+├── pyproject.toml              # Configuracao de lint/testes
+└── requirements.txt            # Dependencias
 ```
 
 ## Contribuicao

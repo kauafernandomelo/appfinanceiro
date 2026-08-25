@@ -1,3 +1,6 @@
+import logging
+import sqlite3
+
 import customtkinter as ctk
 
 from components.base_view import BaseView
@@ -5,6 +8,8 @@ from components.toast import mostrar_toast
 from components.tooltip import Tooltip
 from database import get_connection
 from utils import formatar_moeda, obter_mes_atual
+
+logger = logging.getLogger("financeiro.orcamento")
 
 
 class OrcamentoView(BaseView):
@@ -70,7 +75,8 @@ class OrcamentoView(BaseView):
             with get_connection() as conn:
                 cats = conn.execute("SELECT nome FROM categorias WHERE tipo='despesa' ORDER BY nome").fetchall()
             return [c["nome"] for c in cats] if cats else ["Sem categoria"]
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar categorias: %s", e)
             mostrar_toast(self, "Erro ao carregar categorias", "erro")
             return ["Sem categoria"]
 
@@ -96,7 +102,8 @@ class OrcamentoView(BaseView):
                 else:
                     conn.execute("INSERT INTO orcamento (categoria_id,limite,mes) VALUES (?,?,?)", (c["id"], lim, mes))
                 conn.commit()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao salvar orcamento: %s", e)
             mostrar_toast(self, f"Erro ao salvar orcamento: {e}", "erro")
             return
 
@@ -116,7 +123,8 @@ class OrcamentoView(BaseView):
                        LEFT JOIN categorias c ON o.categoria_id=c.id
                        LEFT JOIN despesas d ON d.categoria_id=c.id AND strftime('%Y-%m',d.data)=o.mes
                        WHERE o.mes=? GROUP BY o.id""", (mes,)).fetchall()
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao verificar alertas: %s", e)
             return
 
         for o in rows:
@@ -143,7 +151,8 @@ class OrcamentoView(BaseView):
                        LEFT JOIN categorias c ON o.categoria_id=c.id
                        LEFT JOIN despesas d ON d.categoria_id=c.id AND strftime('%Y-%m',d.data)=o.mes
                        WHERE o.mes=? GROUP BY o.id""", (mes,)).fetchall()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar orcamentos: %s", e)
             mostrar_toast(self, f"Erro ao carregar orcamentos: {e}", "erro")
             return
 
@@ -208,7 +217,8 @@ class OrcamentoView(BaseView):
             with get_connection() as conn:
                 conn.execute("DELETE FROM orcamento WHERE id=?", (oid,))
                 conn.commit()
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao excluir orcamento: %s", e)
             mostrar_toast(self, f"Erro ao excluir orcamento: {e}", "erro")
             return
         mostrar_toast(self, "Orcamento removido!")

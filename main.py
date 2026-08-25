@@ -4,6 +4,7 @@ from datetime import datetime
 import customtkinter as ctk
 
 from components.sidebar import Sidebar
+from constants import COLORS_DEFAULTS, LIGHT_COLORS_DEFAULTS, __version__
 from database import get_connection, init_db
 from views.categorias import CategoriasView
 from views.configuracoes import ConfiguracoesView
@@ -19,46 +20,16 @@ from views.relatorios import RelatoriosView
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-COLORS = {
-    "bg_dark": "#0f0f1a",
-    "bg_card": "#1a1a2e",
-    "bg_hover": "#16213e",
-    "primary": "#6c5ce7",
-    "primary_hover": "#5a4bd1",
-    "accent": "#00cec9",
-    "green": "#00b894",
-    "red": "#d63031",
-    "yellow": "#fdcb6e",
-    "text": "#ffffff",
-    "text_dim": "#a0a0b0",
-    "border": "#2d2d44",
-}
-
-LIGHT_COLORS = {
-    "bg_dark": "#f0f0f5",
-    "bg_card": "#ffffff",
-    "bg_hover": "#e8e8f0",
-    "primary": "#6c5ce7",
-    "primary_hover": "#5a4bd1",
-    "accent": "#00b2b0",
-    "green": "#009874",
-    "red": "#c0392b",
-    "yellow": "#d4a017",
-    "text": "#1a1a2e",
-    "text_dim": "#555566",
-    "border": "#ccccdd",
-}
-
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("FinancePro - Controle Financeiro")
+        self.title(f"FinancePro v{__version__} - Controle Financeiro")
         self.geometry("1320x760")
         self.minsize(1050, 620)
 
         self.theme = "dark"
-        self.current_colors = dict(COLORS)
+        self.current_colors = dict(COLORS_DEFAULTS)
         self.sidebar_collapsed = False
 
         self.configure(fg_color=self.current_colors["bg_dark"])
@@ -97,12 +68,11 @@ class App(ctk.CTk):
         self.bind("<Control-b>", lambda e: self.navegar("categorias"))
         self.bind("<Control-o>", lambda e: self.navegar("orcamento"))
         self.bind("<Control-m>", lambda e: self.navegar("metas"))
-        self.bind("<Control-c>", lambda e: self.navegar("recorrentes"))
+        self.bind("<Control-Shift-C>", lambda e: self.navegar("recorrentes"))
         self.bind("<Control-t>", lambda e: self.navegar("configuracoes"))
         self.bind("<Escape>", lambda e: self.navegar("dashboard"))
 
     def _verificar_recorrentes(self):
-        """Verifica se existem lancamentos recorrentes para o mes atual que ainda nao foram gerados."""
         hoje = datetime.now()
         mes = hoje.strftime("%Y-%m")
 
@@ -134,7 +104,6 @@ class App(ctk.CTk):
                 self.after(1000, lambda: self._popup_recorrentes(pendentes))
 
     def _popup_recorrentes(self, count):
-        """Exibe popup perguntando se o usuario deseja gerar lancamentos recorrentes do mes."""
         modal = ctk.CTkToplevel(self)
         modal.title("Lancamentos Recorrentes")
         modal.geometry("380x200")
@@ -216,7 +185,6 @@ class App(ctk.CTk):
         ).pack(side="right", expand=True, fill="x", padx=(6, 0))
 
     def _atalho_novo(self):
-        """Navega para a view atual e foca no campo de novo registro."""
         view = self.sidebar.active_view
         if view in ("receitas", "despesas", "investimentos"):
             self.navegar(view)
@@ -224,14 +192,13 @@ class App(ctk.CTk):
             self.navegar("dashboard")
 
     def toggle_theme(self):
-        """Alterna entre tema dark e light."""
         if self.theme == "dark":
             self.theme = "light"
-            self.current_colors = dict(LIGHT_COLORS)
+            self.current_colors = dict(LIGHT_COLORS_DEFAULTS)
             ctk.set_appearance_mode("light")
         else:
             self.theme = "dark"
-            self.current_colors = dict(COLORS)
+            self.current_colors = dict(COLORS_DEFAULTS)
             ctk.set_appearance_mode("dark")
 
         self.configure(fg_color=self.current_colors["bg_dark"])
@@ -240,12 +207,10 @@ class App(ctk.CTk):
         self.navegar(self.sidebar.active_view)
 
     def _toggle_sidebar_collapse(self):
-        """Alterna entre sidebar colapsada (60px) e expandida (240px)."""
         self.sidebar_collapsed = not self.sidebar_collapsed
         self.sidebar.set_collapsed(self.sidebar_collapsed)
 
     def navegar(self, view_name):
-        """Navega para a view especificada, destruindo a view atual."""
         if self.current_view:
             self.current_view.destroy()
 

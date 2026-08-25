@@ -1,11 +1,15 @@
+import logging
+import sqlite3
+
 import customtkinter as ctk
 
 from components.base_view import BaseView
 from components.toast import mostrar_toast
 from components.tooltip import Tooltip
+from constants import ITENS_POR_PAGINA
 from database import get_connection
 
-ITENS_POR_PAGINA = 15
+logger = logging.getLogger("financeiro.categorias")
 
 
 class CategoriasView(BaseView):
@@ -126,7 +130,8 @@ class CategoriasView(BaseView):
         try:
             with get_connection() as conn:
                 total = self._contar_total(conn)
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao contar categorias: %s", e)
             return
         max_paginas = max(0, (total - 1) // ITENS_POR_PAGINA)
         if self._pagina_atual < max_paginas:
@@ -178,7 +183,8 @@ class CategoriasView(BaseView):
                     conn.execute("INSERT INTO categorias (nome,cor,tipo) VALUES (?,?,?)", (nome, cor, tipo))
                     conn.commit()
                     mostrar_toast(self, f"Categoria '{nome}' criada!")
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao salvar categoria: %s", e)
             mostrar_toast(self, f"Erro ao salvar categoria: {e}", "erro")
             return
 
@@ -191,7 +197,8 @@ class CategoriasView(BaseView):
         try:
             with get_connection() as conn:
                 c = conn.execute("SELECT * FROM categorias WHERE id=?", (cid,)).fetchone()
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar categoria: %s", e)
             mostrar_toast(self, "Erro ao carregar categoria.", "erro")
             return
         if not c:
@@ -229,7 +236,8 @@ class CategoriasView(BaseView):
                 paginated_query = query + " LIMIT ? OFFSET ?"
                 paginated_params = params + (ITENS_POR_PAGINA, self._pagina_atual * ITENS_POR_PAGINA)
                 rows = conn.execute(paginated_query, paginated_params).fetchall()
-        except Exception:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao carregar categorias: %s", e)
             mostrar_toast(self, "Erro ao carregar categorias.", "erro")
             return
 
@@ -281,7 +289,8 @@ class CategoriasView(BaseView):
                 if self._tem_dependencias(conn, cid):
                     mostrar_toast(self, "Nao e possivel excluir: existem lancamentos usando esta categoria", "aviso")
                     return
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
+            logger.error("Erro ao verificar dependencias: %s", e)
             mostrar_toast(self, f"Erro ao verificar dependencias: {e}", "erro")
             return
         if self._confirmar_exclusao("Excluir Categoria", "Deseja excluir esta categoria?"):
@@ -291,5 +300,6 @@ class CategoriasView(BaseView):
                     conn.commit()
                 mostrar_toast(self, "Categoria excluida!", "sucesso")
                 self._atualizar()
-            except Exception as e:
+            except (sqlite3.Error, ValueError) as e:
+                logger.error("Erro ao excluir categoria: %s", e)
                 mostrar_toast(self, f"Erro ao excluir: {e}", "erro")
