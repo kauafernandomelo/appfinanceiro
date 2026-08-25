@@ -5,76 +5,104 @@ from components.charts import ChartWidget
 
 
 class RelatoriosView(ctk.CTkFrame):
-    def __init__(self, master):
+    def __init__(self, master, colors=None):
         super().__init__(master, fg_color="transparent")
+        self.colors = colors or {}
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
-        self.criar_header()
-        self.criar_filtros()
-        self.criar_conteudo()
+        self._criar_header()
+        self._criar_filtros()
+        self._criar_conteudo()
 
-    def criar_header(self):
+    def _criar_header(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 20))
 
         ctk.CTkLabel(
             header,
-            text="Relatórios",
+            text="Relatorios",
             font=ctk.CTkFont(size=28, weight="bold"),
+            text_color=self.colors.get("text", "#fff"),
         ).pack(side="left")
 
-    def criar_filtros(self):
-        filtros = ctk.CTkFrame(self, fg_color="#1a1a2e", corner_radius=10)
-        filtros.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        filtros.grid_columnconfigure((0, 1, 2), weight=1)
+    def _criar_filtros(self):
+        filtros = ctk.CTkFrame(
+            self,
+            fg_color=self.colors.get("bg_card", "#1a1a2e"),
+            corner_radius=12,
+        )
+        filtros.grid(row=1, column=0, sticky="ew", pady=(0, 16))
 
-        ctk.CTkLabel(filtros, text="Mês:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.entry_mes = ctk.CTkEntry(filtros, placeholder_text="YYYY-MM")
+        inner = ctk.CTkFrame(filtros, fg_color="transparent")
+        inner.pack(fill="x", padx=20, pady=16)
+
+        ctk.CTkLabel(inner, text="Mes:", font=ctk.CTkFont(size=12),
+                      text_color=self.colors.get("text_dim", "#a0a0a0")).pack(side="left")
+        self.entry_mes = ctk.CTkEntry(inner, placeholder_text="AAAA-MM",
+                                       height=38, width=140, corner_radius=8,
+                                       fg_color=self.colors.get("bg_dark", "#0f0f1a"),
+                                       border_color=self.colors.get("border", "#2d2d44"))
         self.entry_mes.insert(0, obter_mes_atual())
-        self.entry_mes.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+        self.entry_mes.pack(side="left", padx=(8, 16))
 
         ctk.CTkButton(
-            filtros,
-            text="Gerar Relatório",
-            fg_color="#3b82f6",
-            hover_color="#2563eb",
-            command=self.gerar_relatorio,
-        ).grid(row=1, column=1, padx=10, pady=(0, 10), sticky="ew")
+            inner,
+            text="Gerar Relatorio",
+            height=38,
+            corner_radius=8,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=self.colors.get("primary", "#6c5ce7"),
+            hover_color=self.colors.get("primary_hover", "#5a4bd1"),
+            command=self._gerar,
+        ).pack(side="left")
 
-        self.label_total = ctk.CTkLabel(
-            filtros,
+        self.label_saldo = ctk.CTkLabel(
+            inner,
             text="",
             font=ctk.CTkFont(size=14, weight="bold"),
         )
-        self.label_total.grid(row=1, column=2, padx=10, pady=(0, 10), sticky="e")
+        self.label_saldo.pack(side="right")
 
-    def criar_conteudo(self):
-        self.conteudo_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.conteudo_frame.grid(row=2, column=0, sticky="nsew")
-        self.conteudo_frame.grid_columnconfigure((0, 1), weight=1)
-        self.conteudo_frame.grid_rowconfigure(0, weight=1)
+    def _criar_conteudo(self):
+        self.conteudo = ctk.CTkFrame(self, fg_color="transparent")
+        self.conteudo.grid(row=2, column=0, sticky="nsew")
+        self.conteudo.grid_columnconfigure((0, 1), weight=1)
+        self.conteudo.grid_rowconfigure(0, weight=1)
 
-        self.chart_frame1 = ctk.CTkFrame(self.conteudo_frame, fg_color="#1a1a2e", corner_radius=10)
-        self.chart_frame1.grid(row=0, column=0, padx=5, sticky="nsew")
+        self.chart_frame1 = ctk.CTkFrame(
+            self.conteudo,
+            fg_color=self.colors.get("bg_card", "#1a1a2e"),
+            corner_radius=12,
+        )
+        self.chart_frame1.grid(row=0, column=0, padx=(0, 6), sticky="nsew")
 
-        self.chart_frame2 = ctk.CTkFrame(self.conteudo_frame, fg_color="#1a1a2e", corner_radius=10)
-        self.chart_frame2.grid(row=0, column=1, padx=5, sticky="nsew")
+        self.chart_frame2 = ctk.CTkFrame(
+            self.conteudo,
+            fg_color=self.colors.get("bg_card", "#1a1a2e"),
+            corner_radius=12,
+        )
+        self.chart_frame2.grid(row=0, column=1, padx=(6, 0), sticky="nsew")
 
-        self.lista_frame = ctk.CTkScrollableFrame(self, fg_color="#1a1a2e", corner_radius=10)
-        self.lista_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
+        self.lista_frame = ctk.CTkScrollableFrame(
+            self.conteudo,
+            fg_color=self.colors.get("bg_card", "#1a1a2e"),
+            corner_radius=12,
+            scrollbar_button_color=self.colors.get("border", "#2d2d44"),
+        )
+        self.lista_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(12, 0))
         self.lista_frame.grid_columnconfigure(0, weight=1)
 
-    def gerar_relatorio(self):
-        mes = self.entry_mes.get()
+    def _gerar(self):
+        mes = self.entry_mes.get().strip()
         if not mes:
             return
 
         conn = get_connection()
 
         receitas = conn.execute(
-            """SELECT c.nome, SUM(r.valor) as total
+            """SELECT COALESCE(c.nome, 'Sem categoria') as nome, SUM(r.valor) as total
                FROM receitas r
                LEFT JOIN categorias c ON r.categoria_id = c.id
                WHERE strftime('%Y-%m', r.data) = ?
@@ -83,7 +111,7 @@ class RelatoriosView(ctk.CTkFrame):
         ).fetchall()
 
         despesas = conn.execute(
-            """SELECT c.nome, SUM(d.valor) as total
+            """SELECT COALESCE(c.nome, 'Sem categoria') as nome, SUM(d.valor) as total
                FROM despesas d
                LEFT JOIN categorias c ON d.categoria_id = c.id
                WHERE strftime('%Y-%m', d.data) = ?
@@ -91,99 +119,102 @@ class RelatoriosView(ctk.CTkFrame):
             (mes,),
         ).fetchall()
 
-        total_receitas = sum(r["total"] for r in receitas)
-        total_despesas = sum(d["total"] for d in despesas)
-        saldo = total_receitas - total_despesas
+        total_r = sum(r["total"] for r in receitas)
+        total_d = sum(d["total"] for d in despesas)
+        saldo = total_r - total_d
 
-        self.label_total.configure(
+        self.label_saldo.configure(
             text=f"Saldo: {formatar_moeda(saldo)}",
-            text_color="#10b981" if saldo >= 0 else "#ef4444",
+            text_color=self.colors.get("green", "#00b894") if saldo >= 0 else self.colors.get("red", "#d63031"),
         )
 
         conn.close()
 
-        self.atualizar_grafico(
-            self.chart_frame1,
-            [r["nome"] or "Sem categoria" for r in receitas],
-            [r["total"] for r in receitas],
-            f"Receitas - {mes}",
-        )
+        self._chart(self.chart_frame1,
+                    [r["nome"] for r in receitas], [r["total"] for r in receitas],
+                    f"Receitas - {mes}")
 
-        self.atualizar_grafico(
-            self.chart_frame2,
-            [d["nome"] or "Sem categoria" for d in despesas],
-            [d["total"] for d in despesas],
-            f"Despesas - {mes}",
-        )
+        self._chart(self.chart_frame2,
+                    [d["nome"] for d in despesas], [d["total"] for d in despesas],
+                    f"Despesas - {mes}")
 
-        self.atualizar_lista_detalhada(receitas, despesas, total_receitas, total_despesas)
+        self._lista_detalhada(receitas, despesas, total_r, total_d)
 
-    def atualizar_grafico(self, frame, labels, valores, titulo):
-        for widget in frame.winfo_children():
-            widget.destroy()
+    def _chart(self, frame, labels, valores, titulo):
+        for w in frame.winfo_children():
+            w.destroy()
+
+        ctk.CTkLabel(
+            frame,
+            text=f"  {titulo}",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=self.colors.get("text", "#fff"),
+            anchor="w",
+        ).pack(fill="x", padx=16, pady=(12, 0))
 
         if not labels:
-            ctk.CTkLabel(frame, text="Sem dados", text_color="#a0a0a0").pack(pady=20)
+            ctk.CTkLabel(frame, text="Sem dados", text_color=self.colors.get("text_dim", "#a0a0a0")).pack(pady=40)
             return
 
         chart = ChartWidget(frame, fg_color="transparent")
-        chart.pack(fill="both", expand=True, padx=10, pady=10)
-        chart.criar_grafico_pizza(labels, valores, titulo)
+        chart.pack(fill="both", expand=True, padx=8, pady=8)
+        chart.criar_grafico_pizza(labels, valores, "")
 
-    def atualizar_lista_detalhada(self, receitas, despesas, total_receitas, total_despesas):
-        for widget in self.lista_frame.winfo_children():
-            widget.destroy()
+    def _lista_detalhada(self, receitas, despesas, total_r, total_d):
+        for w in self.lista_frame.winfo_children():
+            w.destroy()
 
         ctk.CTkLabel(
             self.lista_frame,
             text="Resumo Detalhado",
             font=ctk.CTkFont(size=16, weight="bold"),
-        ).grid(row=0, column=0, pady=10, sticky="w")
+            text_color=self.colors.get("text", "#fff"),
+        ).grid(row=0, column=0, pady=12, padx=16, sticky="w")
 
         row = 1
         ctk.CTkLabel(
-            self.lista_frame,
-            text="Receitas:",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color="#10b981",
-        ).grid(row=row, column=0, pady=(10, 5), sticky="w")
+            self.lista_frame, text="Receitas",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=self.colors.get("green", "#00b894"),
+        ).grid(row=row, column=0, sticky="w", padx=16, pady=(8, 4))
         row += 1
 
         for r in receitas:
             ctk.CTkLabel(
                 self.lista_frame,
-                text=f"  • {r['nome'] or 'Sem categoria'}: {formatar_moeda(r['total'])}",
+                text=f"  {r['nome']}: {formatar_moeda(r['total'])}",
                 font=ctk.CTkFont(size=12),
-            ).grid(row=row, column=0, sticky="w")
+                text_color=self.colors.get("text_dim", "#a0a0a0"),
+            ).grid(row=row, column=0, sticky="w", padx=16)
             row += 1
 
         ctk.CTkLabel(
             self.lista_frame,
-            text=f"  Total Receitas: {formatar_moeda(total_receitas)}",
+            text=f"  Total Receitas: {formatar_moeda(total_r)}",
             font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#10b981",
-        ).grid(row=row, column=0, sticky="w")
+            text_color=self.colors.get("green", "#00b894"),
+        ).grid(row=row, column=0, sticky="w", padx=16, pady=(4, 8))
         row += 1
 
         ctk.CTkLabel(
-            self.lista_frame,
-            text="Despesas:",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color="#ef4444",
-        ).grid(row=row, column=0, pady=(10, 5), sticky="w")
+            self.lista_frame, text="Despesas",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=self.colors.get("red", "#d63031"),
+        ).grid(row=row, column=0, sticky="w", padx=16, pady=(8, 4))
         row += 1
 
         for d in despesas:
             ctk.CTkLabel(
                 self.lista_frame,
-                text=f"  • {d['nome'] or 'Sem categoria'}: {formatar_moeda(d['total'])}",
+                text=f"  {d['nome']}: {formatar_moeda(d['total'])}",
                 font=ctk.CTkFont(size=12),
-            ).grid(row=row, column=0, sticky="w")
+                text_color=self.colors.get("text_dim", "#a0a0a0"),
+            ).grid(row=row, column=0, sticky="w", padx=16)
             row += 1
 
         ctk.CTkLabel(
             self.lista_frame,
-            text=f"  Total Despesas: {formatar_moeda(total_despesas)}",
+            text=f"  Total Despesas: {formatar_moeda(total_d)}",
             font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#ef4444",
-        ).grid(row=row, column=0, sticky="w")
+            text_color=self.colors.get("red", "#d63031"),
+        ).grid(row=row, column=0, sticky="w", padx=16, pady=(4, 0))

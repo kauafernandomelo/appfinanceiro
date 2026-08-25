@@ -5,17 +5,18 @@ from components.modals import ConfirmarExclusaoModal
 
 
 class MetasView(ctk.CTkFrame):
-    def __init__(self, master):
+    def __init__(self, master, colors=None):
         super().__init__(master, fg_color="transparent")
+        self.colors = colors or {}
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
 
-        self.criar_header()
-        self.criar_formulario()
-        self.criar_lista()
+        self._criar_header()
+        self._criar_formulario()
+        self._criar_lista()
 
-    def criar_header(self):
+    def _criar_header(self):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 20))
 
@@ -23,44 +24,81 @@ class MetasView(ctk.CTkFrame):
             header,
             text="Metas de Economia",
             font=ctk.CTkFont(size=28, weight="bold"),
+            text_color=self.colors.get("text", "#fff"),
         ).pack(side="left")
 
-    def criar_formulario(self):
-        form = ctk.CTkFrame(self, fg_color="#1a1a2e", corner_radius=10)
-        form.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        form.grid_columnconfigure((0, 1, 2), weight=1)
+    def _criar_formulario(self):
+        form = ctk.CTkFrame(
+            self,
+            fg_color=self.colors.get("bg_card", "#1a1a2e"),
+            corner_radius=12,
+        )
+        form.grid(row=1, column=0, sticky="ew", pady=(0, 16))
 
-        ctk.CTkLabel(form, text="Nome:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.entry_nome = ctk.CTkEntry(form, placeholder_text="Ex: Viagem")
-        self.entry_nome.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+        grid = ctk.CTkFrame(form, fg_color="transparent")
+        grid.pack(fill="x", padx=20, pady=20)
+        grid.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        ctk.CTkLabel(form, text="Valor Alvo:").grid(row=0, column=1, padx=10, pady=10, sticky="w")
-        self.entry_valor = ctk.CTkEntry(form, placeholder_text="0,00")
-        self.entry_valor.grid(row=1, column=1, padx=10, pady=(0, 10), sticky="ew")
+        ctk.CTkLabel(grid, text="Nome", font=ctk.CTkFont(size=12),
+                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(
+            row=0, column=0, sticky="w")
+        self.entry_nome = ctk.CTkEntry(grid, placeholder_text="Ex: Viagem",
+                                        height=38, corner_radius=8,
+                                        fg_color=self.colors.get("bg_dark", "#0f0f1a"),
+                                        border_color=self.colors.get("border", "#2d2d44"))
+        self.entry_nome.grid(row=1, column=0, sticky="ew", padx=(0, 8))
 
-        ctk.CTkLabel(form, text="Prazo:").grid(row=0, column=2, padx=10, pady=10, sticky="w")
-        self.entry_prazo = ctk.CTkEntry(form, placeholder_text="YYYY-MM-DD")
-        self.entry_prazo.grid(row=1, column=2, padx=10, pady=(0, 10), sticky="ew")
+        ctk.CTkLabel(grid, text="Valor Alvo (R$)", font=ctk.CTkFont(size=12),
+                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(
+            row=0, column=1, sticky="w")
+        self.entry_valor = ctk.CTkEntry(grid, placeholder_text="0,00",
+                                         height=38, corner_radius=8,
+                                         fg_color=self.colors.get("bg_dark", "#0f0f1a"),
+                                         border_color=self.colors.get("border", "#2d2d44"))
+        self.entry_valor.grid(row=1, column=1, sticky="ew", padx=(0, 8))
+
+        ctk.CTkLabel(grid, text="Prazo", font=ctk.CTkFont(size=12),
+                      text_color=self.colors.get("text_dim", "#a0a0a0")).grid(
+            row=0, column=2, sticky="w")
+        self.entry_prazo = ctk.CTkEntry(grid, placeholder_text="AAAA-MM-DD",
+                                         height=38, corner_radius=8,
+                                         fg_color=self.colors.get("bg_dark", "#0f0f1a"),
+                                         border_color=self.colors.get("border", "#2d2d44"))
+        self.entry_prazo.grid(row=1, column=2, sticky="ew", padx=(0, 8))
 
         ctk.CTkButton(
-            form,
-            text="Criar Meta",
-            fg_color="#8b5cf6",
-            hover_color="#7c3aed",
-            command=self.adicionar,
-        ).grid(row=2, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="ew")
+            grid,
+            text="+ Criar Meta",
+            height=38,
+            corner_radius=8,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=self.colors.get("primary", "#6c5ce7"),
+            hover_color=self.colors.get("primary_hover", "#5a4bd1"),
+            command=self._adicionar,
+        ).grid(row=1, column=3, sticky="ew")
 
-    def criar_lista(self):
-        self.lista_frame = ctk.CTkScrollableFrame(self, fg_color="#1a1a2e", corner_radius=10)
-        self.lista_frame.grid(row=2, column=0, sticky="nsew")
-        self.lista_frame.grid_columnconfigure(0, weight=1)
+    def _criar_lista(self):
+        container = ctk.CTkFrame(
+            self,
+            fg_color=self.colors.get("bg_card", "#1a1a2e"),
+            corner_radius=12,
+        )
+        container.grid(row=2, column=0, sticky="nsew")
 
-        self.atualizar_lista()
+        self.lista = ctk.CTkScrollableFrame(
+            container,
+            fg_color="transparent",
+            scrollbar_button_color=self.colors.get("border", "#2d2d44"),
+        )
+        self.lista.pack(fill="both", expand=True, padx=4, pady=4)
+        self.lista.grid_columnconfigure(0, weight=1)
 
-    def adicionar(self):
-        nome = self.entry_nome.get()
-        valor = self.entry_valor.get().replace(",", ".")
-        prazo = self.entry_prazo.get()
+        self._atualizar()
+
+    def _adicionar(self):
+        nome = self.entry_nome.get().strip()
+        valor = self.entry_valor.get().replace(",", ".").strip()
+        prazo = self.entry_prazo.get().strip()
 
         if not nome or not valor:
             return
@@ -76,135 +114,127 @@ class MetasView(ctk.CTkFrame):
         self.entry_nome.delete(0, "end")
         self.entry_valor.delete(0, "end")
         self.entry_prazo.delete(0, "end")
+        self._atualizar()
 
-        self.atualizar_lista()
-
-    def atualizar_lista(self):
-        for widget in self.lista_frame.winfo_children():
-            widget.destroy()
+    def _atualizar(self):
+        for w in self.lista.winfo_children():
+            w.destroy()
 
         conn = get_connection()
-        metas = conn.execute(
+        rows = conn.execute(
             "SELECT id, nome, valor_alvo, valor_atual, prazo FROM metas ORDER BY prazo"
         ).fetchall()
         conn.close()
 
-        if not metas:
+        if not rows:
             ctk.CTkLabel(
-                self.lista_frame,
+                self.lista,
                 text="Nenhuma meta cadastrada",
-                text_color="#a0a0a0",
-            ).grid(row=0, column=0, pady=20)
+                text_color=self.colors.get("text_dim", "#a0a0a0"),
+                font=ctk.CTkFont(size=14),
+            ).grid(row=0, column=0, pady=60)
             return
 
-        for i, m in enumerate(metas):
-            row = ctk.CTkFrame(self.lista_frame, fg_color="#16213e", corner_radius=8)
-            row.grid(row=i, column=0, padx=5, pady=5, sticky="ew")
+        for i, m in enumerate(rows):
+            row = ctk.CTkFrame(
+                self.lista,
+                fg_color=self.colors.get("bg_dark", "#0f0f1a"),
+                corner_radius=8,
+                height=70,
+            )
+            row.grid(row=i, column=0, sticky="ew", pady=4)
             row.grid_columnconfigure(1, weight=1)
 
-            info_frame = ctk.CTkFrame(row, fg_color="transparent")
-            info_frame.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
-            info_frame.grid_columnconfigure(0, weight=1)
+            info = ctk.CTkFrame(row, fg_color="transparent")
+            info.grid(row=0, column=0, padx=16, pady=10, sticky="w")
+
+            ctk.CTkLabel(info, text=m["nome"], font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w")
+            ctk.CTkLabel(info, text=f"Prazo: {m['prazo']}", font=ctk.CTkFont(size=11),
+                          text_color=self.colors.get("text_dim", "#a0a0a0")).pack(anchor="w")
+
+            bar_frame = ctk.CTkFrame(row, fg_color="transparent")
+            bar_frame.grid(row=0, column=1, padx=12, pady=10, sticky="ew")
+            bar_frame.grid_columnconfigure(0, weight=1)
+
+            pct = (m["valor_atual"] / m["valor_alvo"] * 100) if m["valor_alvo"] > 0 else 0
+            bar_color = self.colors.get("accent", "#00cec9") if pct < 100 else self.colors.get("green", "#00b894")
+
+            bar = ctk.CTkProgressBar(bar_frame, progress_color=bar_color, height=8, corner_radius=4)
+            bar.grid(row=0, column=0, sticky="ew")
+            bar.set(min(pct / 100, 1.0))
 
             ctk.CTkLabel(
-                info_frame,
-                text=m["nome"],
+                bar_frame,
+                text=f"{formatar_moeda(m['valor_atual'])} / {formatar_moeda(m['valor_alvo'])}  ({pct:.0f}%)",
+                font=ctk.CTkFont(size=11),
+                text_color=self.colors.get("text_dim", "#a0a0a0"),
+            ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+            btns = ctk.CTkFrame(row, fg_color="transparent")
+            btns.grid(row=0, column=2, padx=12, pady=10)
+
+            ctk.CTkButton(
+                btns, text="+", width=34, height=34, corner_radius=6,
                 font=ctk.CTkFont(size=14, weight="bold"),
-            ).grid(row=0, column=0, sticky="w")
-
-            ctk.CTkLabel(
-                info_frame,
-                text=f"Prazo: {m['prazo']}",
-                font=ctk.CTkFont(size=11),
-                text_color="#a0a0a0",
-            ).grid(row=1, column=0, sticky="w")
-
-            progress_frame = ctk.CTkFrame(row, fg_color="transparent")
-            progress_frame.grid(row=0, column=2, columnspan=2, padx=10, pady=10, sticky="ew")
-            progress_frame.grid_columnconfigure(0, weight=1)
-
-            percentual = (m["valor_atual"] / m["valor_alvo"] * 100) if m["valor_alvo"] > 0 else 0
-            cor_barra = "#10b981" if percentual >= 100 else "#3b82f6"
-
-            progress = ctk.CTkProgressBar(progress_frame, progress_color=cor_barra)
-            progress.grid(row=0, column=0, sticky="ew")
-            progress.set(min(percentual / 100, 1.0))
-
-            ctk.CTkLabel(
-                progress_frame,
-                text=f"{formatar_moeda(m['valor_atual'])} / {formatar_moeda(m['valor_alvo'])} ({percentual:.0f}%)",
-                font=ctk.CTkFont(size=11),
-                text_color="#a0a0a0",
-            ).grid(row=1, column=0, sticky="w", pady=(2, 0))
-
-            btn_frame = ctk.CTkFrame(row, fg_color="transparent")
-            btn_frame.grid(row=0, column=4, padx=10, pady=10)
-
-            ctk.CTkButton(
-                btn_frame,
-                text="+",
-                width=30,
-                fg_color="#10b981",
-                hover_color="#059669",
-                command=lambda mid=m["id"], val=m["valor_alvo"], cur=m["valor_atual"]: self.adicionar_valor(mid, val, cur),
+                fg_color=self.colors.get("green", "#00b894"),
+                hover_color="#00a884",
+                command=lambda mid=m["id"], cur=m["valor_atual"], alvo=m["valor_alvo"]: self._adicionar_valor(mid, cur, alvo),
             ).pack(side="left", padx=2)
 
             ctk.CTkButton(
-                btn_frame,
-                text="Excluir",
-                width=60,
-                fg_color="#ef4444",
-                hover_color="#dc2626",
-                command=lambda mid=m["id"]: self.excluir(mid),
+                btns, text="X", width=34, height=34, corner_radius=6,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color=self.colors.get("red", "#d63031"),
+                hover_color="#c0392b",
+                command=lambda mid=m["id"]: self._excluir(mid),
             ).pack(side="left", padx=2)
 
-    def adicionar_valor(self, meta_id: int, valor_alvo: float, valor_atual: float):
+    def _adicionar_valor(self, mid, atual, alvo):
         modal = ctk.CTkToplevel(self)
         modal.title("Adicionar Valor")
-        modal.geometry("300x150")
+        modal.geometry("320x180")
+        modal.configure(fg_color=self.colors.get("bg_dark", "#0f0f1a"))
         modal.grab_set()
 
         frame = ctk.CTkFrame(modal, fg_color="transparent")
         frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        ctk.CTkLabel(frame, text="Valor a adicionar:").pack(pady=(0, 10))
-        entry = ctk.CTkEntry(frame, placeholder_text="0,00")
-        entry.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(frame, text="Valor a adicionar:", font=ctk.CTkFont(size=13),
+                      text_color=self.colors.get("text", "#fff")).pack(anchor="w")
+        entry = ctk.CTkEntry(frame, placeholder_text="0,00", height=38, corner_radius=8,
+                              fg_color=self.colors.get("bg_card", "#1a1a2e"),
+                              border_color=self.colors.get("border", "#2d2d44"))
+        entry.pack(fill="x", pady=(8, 16))
 
         def confirmar():
             try:
-                valor = float(entry.get().replace(",", "."))
+                v = float(entry.get().replace(",", "."))
                 conn = get_connection()
-                conn.execute(
-                    "UPDATE metas SET valor_atual = ? WHERE id = ?",
-                    (valor_atual + valor, meta_id),
-                )
+                conn.execute("UPDATE metas SET valor_atual = ? WHERE id = ?",
+                             (atual + v, mid))
                 conn.commit()
                 conn.close()
                 modal.destroy()
-                self.atualizar_lista()
+                self._atualizar()
             except ValueError:
                 pass
 
         ctk.CTkButton(
-            frame,
-            text="Confirmar",
-            fg_color="#10b981",
-            hover_color="#059669",
+            frame, text="Confirmar", height=38, corner_radius=8,
+            fg_color=self.colors.get("green", "#00b894"),
+            hover_color="#00a884",
             command=confirmar,
         ).pack(fill="x")
 
-    def excluir(self, meta_id: int):
+    def _excluir(self, mid):
         modal = ConfirmarExclusaoModal(
-            self,
-            "Excluir Meta",
-            "Tem certeza que deseja excluir esta meta?",
+            self, "Excluir Meta", "Deseja excluir esta meta?",
+            colors=self.colors,
         )
         self.wait_window(modal)
-
         if modal.resultado:
             conn = get_connection()
-            conn.execute("DELETE FROM metas WHERE id = ?", (meta_id,))
+            conn.execute("DELETE FROM metas WHERE id = ?", (mid,))
             conn.commit()
             conn.close()
-            self.atualizar_lista()
+            self._atualizar()
